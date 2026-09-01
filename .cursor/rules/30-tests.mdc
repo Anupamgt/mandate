@@ -1,0 +1,5 @@
+---
+description: Test conventions
+globs: **/*.test.ts
+---
+vitest. Use fixed seeds and injected clocks. No network in unit tests; RazorpayTestRail is tested only via contract tests tagged `integration` and skipped without RAZORPAY_KEY_ID. Tests named after PRD IDs where applicable: `FR-13 reserve-then-settle holds under 10 parallel proposals`.
