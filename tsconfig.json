@@ -1,0 +1,15 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/shared" },
+    { "path": "packages/db" },
+    { "path": "packages/policy" },
+    { "path": "packages/audit" },
+    { "path": "packages/mandate" },
+    { "path": "packages/rails" },
+    { "path": "apps/proxy" },
+    { "path": "apps/resource-server" },
+    { "path": "apps/agent" },
+    { "path": "apps/web" }
+  ]
+}

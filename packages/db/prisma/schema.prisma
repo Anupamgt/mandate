@@ -1,0 +1,146 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum MandateStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+model Mandate {
+  id          String         @id
+  agentId     String
+  principalId String
+  bodyJson    String
+  signature   String
+  status      MandateStatus
+  issuedAt    DateTime
+  revocations Revocation[]
+  spendRequests SpendRequest[]
+  reservations  Reservation[]
+  auditRows     AuditRow[]
+
+  @@index([agentId, status])
+}
+
+model Revocation {
+  id         String   @id
+  mandateId  String
+  mandate    Mandate  @relation(fields: [mandateId], references: [id])
+  signature  String
+  revokedAt  DateTime
+  reason     String
+}
+
+model SpendRequest {
+  id             String        @id
+  mandateId      String
+  mandate        Mandate       @relation(fields: [mandateId], references: [id])
+  agentId        String
+  tool           String
+  counterpartyId String
+  amountPaise    Int
+  purpose        String
+  rationale      String        @default("")
+  invoiceId      String?
+  status         String
+  reservation    Reservation?
+  decision       Decision?
+  settlement     Settlement?
+  approval       Approval?
+  invoice        Invoice?
+}
+
+model Reservation {
+  id             String       @id
+  spendRequestId String       @unique
+  spendRequest   SpendRequest @relation(fields: [spendRequestId], references: [id])
+  mandateId      String
+  mandate        Mandate      @relation(fields: [mandateId], references: [id])
+  amountPaise    Int
+  expiresAt      DateTime
+  releasedAt     DateTime?
+}
+
+model Decision {
+  id             String       @id
+  spendRequestId String       @unique
+  spendRequest   SpendRequest @relation(fields: [spendRequestId], references: [id])
+  decision       String
+  reasonCode     String
+  checksJson     String
+  decidedAt      DateTime
+}
+
+model Settlement {
+  id             String       @id
+  spendRequestId String       @unique
+  spendRequest   SpendRequest @relation(fields: [spendRequestId], references: [id])
+  railId         String
+  externalRef    String
+  amountPaise    Int
+  idempotencyKey String       @unique
+  settledAt      DateTime
+  reversal       Reversal?
+}
+
+model Reversal {
+  id           String     @id
+  settlementId String     @unique
+  settlement   Settlement @relation(fields: [settlementId], references: [id])
+  externalRef  String
+  amountPaise  Int
+  reason       String
+  reversedAt   DateTime
+  succeeded    Boolean
+}
+
+model Invoice {
+  id             String        @id
+  spendRequestId String?       @unique
+  spendRequest   SpendRequest? @relation(fields: [spendRequestId], references: [id])
+  providerId     String
+  provider       Provider      @relation(fields: [providerId], references: [id])
+  resource       String
+  amountPaise    Int
+  expiresAt      DateTime
+  consumedAt     DateTime?
+}
+
+model Approval {
+  id             String       @id
+  spendRequestId String       @unique
+  spendRequest   SpendRequest @relation(fields: [spendRequestId], references: [id])
+  signature      String
+  approvedAt     DateTime
+}
+
+model AuditRow {
+  seq            Int      @id @default(autoincrement())
+  ts             DateTime
+  mandateId      String?
+  mandate        Mandate? @relation(fields: [mandateId], references: [id])
+  spendRequestId String?
+  eventType      String
+  actor          String
+  payloadHash    String
+  decision       String?
+  reasonCode     String?
+  prevHash       String
+  hash           String
+
+  @@index([mandateId, seq])
+}
+
+model Provider {
+  id            String    @id
+  name          String
+  webhookSecret String
+  invoices      Invoice[]
+}

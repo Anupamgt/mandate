@@ -11,6 +11,7 @@ coverage/
 *.db
 *.db-journal
 dev.db
+*.tsbuildinfo
 .DS_Store
 Thumbs.db
 .turbo/

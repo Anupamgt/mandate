@@ -1,0 +1,25 @@
+{
+  "name": "mandate",
+  "type": "module",
+  "private": true,
+  "packageManager": "pnpm@11.25.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "typecheck": "pnpm db:generate && tsc -b",
+    "test": "vitest run",
+    "test:policy": "vitest run --project policy",
+    "db:generate": "pnpm --filter @mandate/db generate",
+    "dev": "pnpm --filter @mandate/proxy dev",
+    "batch": "echo \"batch: T-001 stub — implement in apps/agent\" && exit 1",
+    "redteam": "echo \"redteam: not until v0.4.0\" && exit 1",
+    "audit:verify": "echo \"audit:verify: T-008\" && exit 1",
+    "check": "pnpm typecheck && pnpm test"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4",
+    "@types/node": "^24.3.0"
+  }
+}

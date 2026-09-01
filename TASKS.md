@@ -5,11 +5,11 @@ Ordered by the release plan. One Cursor Agent session per line. Do not start P2 
 Blocked items wait on test-mode keys in `.env` (`rzp_test_` only).
 
 ```
-- [ ] T-001  NFR-02   Monorepo scaffold (pnpm, strict TS, apps/* + packages/*)  [medium]
-- [ ] T-002  NFR-04   Prisma schema from ARCHITECTURE data model, SQLite         [medium]  depends: T-001
-- [ ] T-003  FR-12    Shared enums (reason codes, events) + Paise + exhaustiveness  [medium]  depends: T-001
-- [ ] T-004  FR-31    Day-0 rail decision → ARCHITECTURE.md                      [high]    blocked: keys
-- [ ] T-005  FR-20    Dump mcp.razorpay.com tools → apps/proxy/config/upstream-tools.json  [high]  blocked: keys
+- [x] T-001  NFR-02   Monorepo scaffold (pnpm, strict TS, apps/* + packages/*)  [medium]
+- [x] T-002  NFR-04   Prisma schema from ARCHITECTURE data model, SQLite         [medium]  depends: T-001
+- [x] T-003  FR-12    Shared enums (reason codes, events) + Paise + exhaustiveness  [medium]  depends: T-001
+- [x] T-004  FR-31    Day-0 rail decision → ARCHITECTURE.md                      [high]    rail: s2s_order
+- [x] T-005  FR-20    Dump mcp.razorpay.com tools → apps/proxy/config/upstream-tools.json  [high]  42 tools
 - [ ] T-006  FR-10/11 policy evaluate() + one test per reason code               [xhigh]   depends: T-003
 - [ ] T-007  FR-01/02 mandate schema + Ed25519 sign/verify                       [xhigh]   depends: T-003
 - [ ] T-008  FR-60/62 audit hash-chain + pnpm audit:verify                       [xhigh]   depends: T-003

@@ -4,10 +4,10 @@
 
 | Status | Value |
 |---|---|
-| Tag | `v0.0.1-docs` |
+| Tag | `v0.1.0` |
 | Track | **TBD at `v0.3.0`** (Open Track vs Track 01 Agentic Commerce) |
-| Day-0 rail (FR-31) | **Blocked** — no `RAZORPAY_KEY_ID` in this environment yet |
-| Day-0 MCP dump (FR-20) | **Blocked** — same keys. Remote URL is `https://mcp.razorpay.com/mcp` |
+| Day-0 rail (FR-31) | **`s2s_order`** — see §8 |
+| Day-0 MCP dump (FR-20) | **Confirmed** — `https://mcp.razorpay.com/mcp`, 42 tools in `apps/proxy/config/upstream-tools.json` |
 
 ---
 
@@ -154,19 +154,33 @@ Rail: quote() | pay(quote, mandate_id, idempotency_key) | reverse(settlement, re
 
 ## 8. Day-0 — keys and rails
 
-**Blocked until a test-mode `.env` exists.** Copy `.env.example` → `.env`. Generate keys from the [Razorpay Dashboard](https://dashboard.razorpay.com/app/keys) in **Test** mode. Key ID must start with `rzp_test_`. Do not paste secrets into chat or git.
+Test-mode keys live in local `.env` (gitignored). Copy `.env.example` → `.env`. Key ID must start with `rzp_test_`. Do not paste secrets into chat or git.
 
 Remote MCP: [docs](https://razorpay.com/docs/mcp-server/) · endpoint `https://mcp.razorpay.com/mcp` · `Authorization: Basic Base64(KEY_ID:KEY_SECRET)`.
 
-Decision tree (45-minute cap, first success wins):
+Decision tree (first *money-moving* primitive that the test account actually exposes):
 
-1. **RazorpayX payout** (`POST /v1/payouts`) — if test account + customer identifier work.
-2. **S2S order** — if payouts are unavailable.
-3. **Provider-side order + refund** — fallback that still hits real test APIs.
+1. **RazorpayX payout** (`GET/POST /v1/payouts`) — not available.
+2. **S2S order** (`GET/POST /v1/orders` + payments) — available.
+3. **Provider-side order + refund** — refunds also available; used as `Rail.reverse()`.
 
-Record the winner in this section. Do not tag `v0.1.0` until that sentence exists or this block is explicitly waived.
+### Decision (2026-09-01)
 
-**2026-09-01:** `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` not present in the builder environment. T-004 and T-005 remain blocked.
+**Winner: `s2s_order`.** `RazorpayTestRail.pay()` creates a Razorpay order and a test-mode payment against it. `reverse()` issues a refund. Batch/red-team stay on `MockRail`.
+
+Evidence (`apps/proxy/config/day0-probe.json`):
+
+| Endpoint | HTTP | Notes |
+|---|---|---|
+| `GET /v1/payments` | 200 | |
+| `GET /v1/orders` | 200 | chosen pay primitive |
+| `GET /v1/refunds` | 200 | reverse path |
+| `GET /v1/payouts` | **400** | `Access to requested resource not available` |
+| `GET /v1/contacts` | 200 | listing works; payouts do not |
+| `GET /v1/fund_accounts` | 200 | listing works; payouts do not |
+| `POST https://mcp.razorpay.com/mcp` initialize + `tools/list` | 200 | **42 tools**, no `create_payout` |
+
+MCP money-out surface is only `update_refund`. There is no payout-create tool, which matches the REST 400. Unclassified names still fail closed (`TOOL_UNCLASSIFIED`). Full dump + class: `apps/proxy/config/upstream-tools.json`.
 
 ## 9. Security
 
@@ -317,3 +331,4 @@ P0 = submission fails without it. P1 = materially raises odds. P2 = ship if time
 | Date | Change |
 |---|---|
 | 2026-09-01 | Initial public architecture. Rail/MCP Day-0 blocked on keys. Track TBD at v0.3.0. |
+| 2026-09-01 | Day-0: rail = `s2s_order`; MCP 42 tools; payouts REST 400. Monorepo + Prisma + shared enums; `pnpm typecheck` green. |
