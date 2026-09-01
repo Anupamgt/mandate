@@ -16,6 +16,6 @@
   "paise_withheld": 220000,
   "paise_reversed": 3000,
   "residual_paise": 0,
-  "decision_latency_p50_ms": 16.311211000000185,
-  "decision_latency_p99_ms": 34.20882299999994
+  "decision_latency_p50_ms": 17.51674200000025,
+  "decision_latency_p99_ms": 48.986398000000236
 }

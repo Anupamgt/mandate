@@ -130,4 +130,33 @@ describe("REST gate", () => {
     expect(capped, JSON.stringify(bodies)).toBeGreaterThanOrEqual(5);
     expect(allowed + capped).toBe(10);
   });
+
+  it("SEC-08 RATE_LIMITED is enforced by the proxy, not evaluate()", async () => {
+    const { app, keys } = await makeTestProxy({ rateLimitPerMinute: 2 });
+    const parsed = parseMandateBody({ ...body, step_up_above_paise: 50_000 });
+    const signature = await signMandateBody(parsed, keys.privateKeyHex);
+    await app.request("/mandates", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ body: parsed, signature }),
+    });
+    const propose = () =>
+      app.request("/spend/propose", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          agent_id: "agent_demo",
+          tool: "create_order",
+          counterparty_id: "prov_compute_a",
+          amount_paise: 1000,
+          purpose: "rate",
+        }),
+      });
+    const first = (await (await propose()).json()) as { reason_code: string };
+    const second = (await (await propose()).json()) as { reason_code: string };
+    const third = (await (await propose()).json()) as { reason_code: string };
+    expect(first.reason_code).toBe("ALLOW");
+    expect(second.reason_code).toBe("ALLOW");
+    expect(third.reason_code).toBe("RATE_LIMITED");
+  });
 });

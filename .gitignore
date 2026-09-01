@@ -1,8 +1,6 @@
 .env
 .env.local
 .env.*.local
-PRD.md
-DEV-PROCESS.md
 node_modules/
 dist/
 build/

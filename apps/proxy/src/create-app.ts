@@ -13,10 +13,10 @@ import {
   verifyAudit,
   type ProxyDeps,
 } from "./spend.js";
-import { handleMcpJsonRpc, type McpSession } from "./mcp/jsonrpc.js";
+import { type McpSession } from "./mcp/jsonrpc.js";
+import { dispatchMcp } from "./mcp/handlers.js";
 import { loadUpstreamTools } from "./classify.js";
 import { governToolCall } from "./mcp/govern.js";
-import { ledgerFor } from "./spend.js";
 
 export function createApp(deps: ProxyDeps) {
   const app = new Hono();
@@ -183,54 +183,7 @@ export function createApp(deps: ProxyDeps) {
     if (headerAgent) session.agentId = headerAgent;
     sessions.set(sessionId, session);
     const msg = await c.req.json();
-    const result = await handleMcpJsonRpc(msg, {
-      session,
-      tools: deps.tools,
-      now: deps.now(),
-      loadMandate: async (id) => {
-        const row = await deps.prisma.mandate.findFirst({
-          where: { agentId: id },
-          orderBy: { issuedAt: "desc" },
-        });
-        if (!row) return null;
-        return {
-          body: parseMandateBody(JSON.parse(row.bodyJson)),
-          signature: row.signature,
-          status: row.status,
-          publicKeyHex: deps.operatorPublicKeyHex,
-        };
-      },
-      ledgerFor: async (mandate) => {
-        const row = await deps.prisma.mandate.findFirst({ where: { agentId: mandate.body.agent_id } });
-        if (!row) {
-          return { settledPaise: 0, reservedPaise: 0, recentProposeCount: 0, rateLimitPerMinute: 30 };
-        }
-        return ledgerFor(deps.prisma, row.id, deps.now());
-      },
-      remaining: async (agent) => {
-        const row = await deps.prisma.mandate.findFirst({
-          where: { agentId: agent, status: "ACTIVE" },
-        });
-        if (!row) return { mandate: null };
-        const body = parseMandateBody(JSON.parse(row.bodyJson));
-        return {
-          mandate_id: row.id,
-          status: row.status,
-          remaining_paise: await remainingBudget(deps.prisma, row.id, body.max_total_paise),
-        };
-      },
-      onAllow: async (g) => {
-        const result = await proposeSpend(deps, {
-          agentId: session.agentId ?? "",
-          tool: g.tool,
-          counterpartyId: g.counterpartyId,
-          amountPaise: g.amountPaise,
-          purpose: "mcp",
-        });
-        return result;
-      },
-      onReadForward: async (tool, args) => ({ forwarded: true, tool, args }),
-    });
+    const result = await dispatchMcp(deps, session, msg);
     return c.json(result);
   });
 

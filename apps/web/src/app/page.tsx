@@ -12,6 +12,15 @@ import { Label } from "@/components/ui/label";
 
 const PROXY = process.env.NEXT_PUBLIC_PROXY_URL ?? "http://127.0.0.1:18787";
 
+/** FR-14: format paise as rupees with integer arithmetic only (no toFixed/parseFloat). */
+function formatRupeesFromPaise(paise: number): string {
+  const negative = paise < 0;
+  const abs = negative ? -paise : paise;
+  const rupees = Math.trunc(abs / 100);
+  const remainder = abs % 100;
+  return `${negative ? "-" : ""}₹${rupees}.${String(remainder).padStart(2, "0")}`;
+}
+
 const hashes = ed as unknown as { hashes?: { sha512?: typeof sha512 } };
 if (hashes.hashes && !hashes.hashes.sha512) hashes.hashes.sha512 = sha512;
 
@@ -60,7 +69,7 @@ export default function Page() {
   const remainingPct = useMemo(() => {
     if (!selected) return 0;
     const max = selected.body.max_total_paise || 1;
-    return Math.max(0, Math.min(100, (selected.remaining_paise / max) * 100));
+    return Math.max(0, Math.min(100, Math.floor((selected.remaining_paise * 100) / max)));
   }, [selected]);
 
   const refresh = useCallback(async () => {
@@ -218,9 +227,9 @@ export default function Page() {
                   <div className="h-full bg-primary" style={{ width: `${remainingPct}%` }} />
                 </div>
                 <p className="text-sm">
-                  ₹{(selected.remaining_paise / 100).toFixed(2)} remaining of ₹
-                  {(selected.body.max_total_paise / 100).toFixed(2)} · ₹
-                  {(selected.body.max_per_txn_paise / 100).toFixed(2)} per txn · {selected.body.purpose}
+                  {formatRupeesFromPaise(selected.remaining_paise)} remaining of{" "}
+                  {formatRupeesFromPaise(selected.body.max_total_paise)} ·{" "}
+                  {formatRupeesFromPaise(selected.body.max_per_txn_paise)} per txn · {selected.body.purpose}
                 </p>
               </>
             ) : (

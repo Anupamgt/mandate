@@ -15,6 +15,6 @@ MCP client / showcase agent
  mcp.razorpay.com  (keys live only here)
 ```
 
-Commands: `pnpm dev` · `pnpm test` · `pnpm batch` · `pnpm redteam`
+Commands: `pnpm dev` · `pnpm test` · `pnpm batch` · `pnpm redteam` · `pnpm lint`
 
-Public contract is `ARCHITECTURE.md`. **When in doubt, ARCHITECTURE.md wins over any code comment.**
+**When in doubt, PRD.md wins over any code comment.** DEV-PROCESS.md is the build protocol. Do not edit those two files. ARCHITECTURE.md is the public contract; if it disagrees with PRD.md, change the code and ARCHITECTURE, not the PRD. If PRD.md is not in the tree, ARCHITECTURE.md is the stand-in until the original is added.

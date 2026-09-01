@@ -27,8 +27,6 @@ export type MandateView = {
 export type LedgerView = {
   settledPaise: Paise;
   reservedPaise: Paise;
-  recentProposeCount: number;
-  rateLimitPerMinute: number;
 };
 
 function deny(reason_code: ReasonCode, checks: string[]): PolicyResult {
@@ -41,8 +39,9 @@ function pass(name: string, checks: string[]): string[] {
 }
 
 /**
- * FR-10/FR-11. Pure besides Ed25519 verify (no I/O, no Date.now()).
- * Fixed check order — first failure short-circuits.
+ * FR-10/FR-11 / PRD §6.2. Pure besides Ed25519 verify (no I/O, no Date.now()).
+ * Fixed check order — first failure short-circuits to DENY. Step-up only if every prior check passes:
+ * signature → status → window → agent → tool → counterparty → per-txn → cumulative → step-up.
  */
 export async function evaluate(
   req: SpendReq,
@@ -55,7 +54,6 @@ export async function evaluate(
   if (mandate === null) {
     return deny("NO_MANDATE", ["mandate:missing"]);
   }
-  pass("mandate", checks);
 
   const sigOk = await verifyMandateBody(mandate.body, mandate.signature, mandate.publicKeyHex);
   if (!sigOk) {
@@ -88,10 +86,8 @@ export async function evaluate(
   pass("agent", checks);
 
   if (req.toolClass === "UNCLASSIFIED") {
-    return deny("TOOL_UNCLASSIFIED", [...checks, "tool_class:unclassified"]);
+    return deny("TOOL_UNCLASSIFIED", [...checks, "tool:unclassified"]);
   }
-  pass("tool_class", checks);
-
   if (!mandate.body.allowed_tools.includes(req.tool)) {
     return deny("TOOL_NOT_ALLOWED", [...checks, "tool:not_allowed"]);
   }
@@ -112,11 +108,6 @@ export async function evaluate(
     return deny("CUM_CAP_EXCEEDED", [...checks, "cumulative:exceeded"]);
   }
   pass("cumulative", checks);
-
-  if (ledger.recentProposeCount >= ledger.rateLimitPerMinute) {
-    return deny("RATE_LIMITED", [...checks, "rate:exceeded"]);
-  }
-  pass("rate", checks);
 
   if (req.amountPaise > mandate.body.step_up_above_paise) {
     return {

@@ -28,7 +28,7 @@ Then open the operator console at [http://127.0.0.1:43123](http://127.0.0.1:4312
 
 ## MCP (T-017)
 
-The proxy is an MCP server on **stdio** and **streamable HTTP**.
+The proxy is an MCP server on **stdio** (`@modelcontextprotocol/sdk` `StdioServerTransport`) and **streamable HTTP** (`POST /mcp`).
 
 - Re-exposes the 42 `mcp.razorpay.com` tools 1:1, plus `mandate.status`.
 - `READ` tools pass through and write an audit row.
@@ -76,3 +76,5 @@ packages/shared         reason codes, events, Paise
 ```
 
 Test-mode only. MIT. See [ARCHITECTURE.md](./ARCHITECTURE.md) and [SECURITY.md](./SECURITY.md).
+
+`PRD.md` and `DEV-PROCESS.md` are the source of truth when present. Do not edit them; align code to them.

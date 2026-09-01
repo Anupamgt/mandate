@@ -18,6 +18,7 @@ export type ProxyDeps = {
   now: () => Date;
   provisionTimeoutMs: number;
   waitForProvision?: (invoiceId: string) => Promise<boolean>;
+  rateLimitPerMinute?: number;
 };
 
 const auditChain: { tail: Promise<unknown> } = { tail: Promise.resolve() };
@@ -105,18 +106,17 @@ export async function ledgerFor(prisma: PrismaClient, mandateId: string, now: Da
     where: { mandateId, releasedAt: null, expiresAt: { gt: now } },
   });
   const minuteAgo = new Date(now.getTime() - 60_000);
-  const recentProposeCount = await prisma.spendRequest.count({
-    where: { mandateId, id: { not: "" } },
-  });
+  const mandate = await prisma.mandate.findUnique({ where: { id: mandateId } });
   const recent = await prisma.decision.count({
-    where: { spendRequest: { mandateId }, decidedAt: { gte: minuteAgo } },
+    where: {
+      decidedAt: { gte: minuteAgo },
+      spendRequest: mandate ? { agentId: mandate.agentId } : { mandateId },
+    },
   });
-  void recentProposeCount;
   return {
     settledPaise: asPaise(settled._sum.amountPaise ?? 0),
     reservedPaise: asPaise(reserved._sum.amountPaise ?? 0),
     recentProposeCount: recent,
-    rateLimitPerMinute: 30,
   };
 }
 
@@ -281,12 +281,41 @@ async function proposeSpendInner(deps: ProxyDeps, input: ProposeInput) {
     });
   }
 
-  const led = mandateRow ? await ledgerFor(deps.prisma, mandateRow.id, now) : {
-    settledPaise: asPaise(0),
-    reservedPaise: asPaise(0),
-    recentProposeCount: 0,
-    rateLimitPerMinute: 30,
-  };
+  const led = mandateRow
+    ? await ledgerFor(deps.prisma, mandateRow.id, now)
+    : { settledPaise: asPaise(0), reservedPaise: asPaise(0), recentProposeCount: 0 };
+
+  if (led.recentProposeCount >= (deps.rateLimitPerMinute ?? 30)) {
+    const limited = {
+      decision: "DENY" as const,
+      reason_code: "RATE_LIMITED" as const,
+      checks: ["rate:exceeded"] as const,
+    };
+    if (mandateRow) {
+      await deps.prisma.decision.create({
+        data: {
+          id: randomUUID(),
+          spendRequestId: spendId,
+          decision: limited.decision,
+          reasonCode: limited.reason_code,
+          checksJson: JSON.stringify(limited.checks),
+          decidedAt: now,
+        },
+      });
+      await appendAudit(deps.prisma, {
+        mandateId: mandateRow.id,
+        spendRequestId: spendId,
+        eventType: "DECISION",
+        actor: "policy",
+        payload: limited,
+        decision: limited.decision,
+        reasonCode: limited.reason_code,
+        ts: now,
+      });
+      await deps.prisma.spendRequest.update({ where: { id: spendId }, data: { status: "DENY" } });
+    }
+    return { spend_request_id: spendId, ...limited };
+  }
 
   const decision = await evaluate(
     {
@@ -297,7 +326,7 @@ async function proposeSpendInner(deps: ProxyDeps, input: ProposeInput) {
       amountPaise: asPaise(input.amountPaise),
     },
     mandateView,
-    led,
+    { settledPaise: led.settledPaise, reservedPaise: led.reservedPaise },
     now,
   );
 

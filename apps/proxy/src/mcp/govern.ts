@@ -49,6 +49,7 @@ export type GovernInput = {
 
 /**
  * FR-20/21/22/23 — classify and gate an MCP tools/call before any upstream forward.
+ * SEC-08 rate limit lives here (proxy), not in evaluate() — PRD §6.2 check order has no rate step.
  */
 export async function governToolCall(input: GovernInput): Promise<GovernResult> {
   const { toolName, args, tools, now } = input;
@@ -86,6 +87,10 @@ export async function governToolCall(input: GovernInput): Promise<GovernResult> 
     ? await input.ledgerFor(mandate)
     : { settledPaise: 0, reservedPaise: 0, recentProposeCount: 0, rateLimitPerMinute: 30 };
 
+  if (ledger.recentProposeCount >= ledger.rateLimitPerMinute) {
+    return { kind: "deny", reason_code: "RATE_LIMITED", checks: ["rate:exceeded"], decision: "DENY" };
+  }
+
   const result = await evaluate(
     {
       agentId: input.agentId,
@@ -98,8 +103,6 @@ export async function governToolCall(input: GovernInput): Promise<GovernResult> 
     {
       settledPaise: asPaise(ledger.settledPaise),
       reservedPaise: asPaise(ledger.reservedPaise),
-      recentProposeCount: ledger.recentProposeCount,
-      rateLimitPerMinute: ledger.rateLimitPerMinute,
     },
     now,
   );

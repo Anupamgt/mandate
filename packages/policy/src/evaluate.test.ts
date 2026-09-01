@@ -52,8 +52,6 @@ function ledger(over: Partial<LedgerView> = {}): LedgerView {
   return {
     settledPaise: asPaise(0),
     reservedPaise: asPaise(0),
-    recentProposeCount: 0,
-    rateLimitPerMinute: 30,
     ...over,
   };
 }
@@ -173,12 +171,6 @@ describe("FR-10/FR-11 evaluate()", () => {
       NOW,
     );
     expect(result.reason_code).toBe("CUM_CAP_EXCEEDED");
-  });
-
-  it("RATE_LIMITED", async () => {
-    const { view } = await signedMandate();
-    const result = await evaluate(req(), view, ledger({ recentProposeCount: 30 }), NOW);
-    expect(result.reason_code).toBe("RATE_LIMITED");
   });
 
   it("STEP_UP_THRESHOLD only if prior checks pass", async () => {

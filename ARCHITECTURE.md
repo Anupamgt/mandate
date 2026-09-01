@@ -77,6 +77,8 @@ Pure function. No I/O, no LLM, no `Date.now()` — `now` is passed in.
 8. cumulative cap (settled + live reservations)  
 9. step-up threshold  
 
+`RATE_LIMITED` is **SEC-08**, not a policy check. The proxy applies it (e.g. 30 `propose_spend` decisions / agent / minute) **before** calling `evaluate()`.
+
 **Reserve-then-settle:** on ALLOW the proxy inserts a `Reservation` in the same DB transaction as the cumulative check. Reservations expire after 60s if unsettled.
 
 Amounts are integer **paise** everywhere (`Paise` branded number). No floats.

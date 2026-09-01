@@ -30,7 +30,7 @@ function expectedReason(i: number): string {
 }
 
 export async function runBatch(outPath = resolve("metrics.json")): Promise<Metrics> {
-  const { app, keys, deps } = await makeTestProxy();
+  const { app, keys, deps } = await makeTestProxy({ rateLimitPerMinute: 10_000 });
   const latencies: number[] = [];
   const denied_by_reason: Record<string, number> = {};
   let allowed = 0;
@@ -72,7 +72,7 @@ export async function runBatch(outPath = resolve("metrics.json")): Promise<Metri
     let amount = 1000;
     let counterparty = "prov_compute_a";
     let tool = "create_order";
-    let agent = "agent_demo";
+    const agent = "agent_demo";
     let failProvision = false;
     if (expectCode === "PER_TXN_CAP_EXCEEDED") amount = 20_000;
     if (expectCode === "COUNTERPARTY_NOT_ALLOWED") counterparty = "prov_compute_a1";

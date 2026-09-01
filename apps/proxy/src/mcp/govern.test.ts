@@ -115,6 +115,26 @@ describe("FR-20/21/22/23 MCP governance", () => {
     expect(result.kind).toBe("allow");
   });
 
+  it("SEC-08 RATE_LIMITED before evaluate()", async () => {
+    const view = await mandate();
+    const result = await governToolCall({
+      agentId: "agent_demo",
+      toolName: "create_order",
+      args: { amount: 1000, counterparty_id: "prov_compute_a" },
+      tools,
+      loadMandate: async () => view,
+      ledgerFor: async () => ({
+        settledPaise: 0,
+        reservedPaise: 0,
+        recentProposeCount: 30,
+        rateLimitPerMinute: 30,
+      }),
+      now: NOW,
+    });
+    expect(result.kind).toBe("deny");
+    if (result.kind === "deny") expect(result.reason_code).toBe("RATE_LIMITED");
+  });
+
   it("mandate.status requires agent_id", async () => {
     const result = await governToolCall({
       agentId: undefined,

@@ -12,7 +12,7 @@ import type { ProxyDeps } from "./spend.js";
 
 const repoRoot = fileURLToPath(new URL("../../..", import.meta.url));
 
-export async function makeTestProxy(opts: { reverseFails?: boolean } = {}) {
+export async function makeTestProxy(opts: { reverseFails?: boolean; rateLimitPerMinute?: number } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "mandate-"));
   const dbPath = join(dir, "test.db");
   const databaseUrl = `file:${dbPath}`;
@@ -34,6 +34,7 @@ export async function makeTestProxy(opts: { reverseFails?: boolean } = {}) {
     now: () => new Date("2026-09-02T12:00:00.000Z"),
     provisionTimeoutMs: 5,
     waitForProvision: async () => true,
+    rateLimitPerMinute: opts.rateLimitPerMinute ?? 30,
   };
   return { app: createApp(deps), deps, keys, dbPath };
 }

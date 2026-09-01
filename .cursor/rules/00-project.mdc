@@ -2,7 +2,9 @@
 description: Mandate — governance proxy for agent payments. Always apply.
 alwaysApply: true
 ---
-You are building Mandate. Read ARCHITECTURE.md before starting any task; do not infer requirements that are not written there.
+You are building Mandate. Read PRD.md (FR-/SEC-/RT- IDs) and DEV-PROCESS.md before starting any task. Do not infer requirements that are not written there. Do not edit PRD.md or DEV-PROCESS.md.
+
+When PRD.md or DEV-PROCESS.md disagree with ARCHITECTURE.md, code, or this file, **PRD.md / DEV-PROCESS.md win**. If those files are not in the tree yet, follow ARCHITECTURE.md and restore the originals without rewriting them.
 
 Stack: pnpm monorepo, TypeScript strict, Hono (apps/proxy), Next.js 15 App Router (apps/web), Prisma + SQLite, zod, vitest, @noble/ed25519, @modelcontextprotocol/sdk. Do not add dependencies without listing them and the reason in your final message.
 
@@ -14,7 +16,6 @@ Non-negotiables:
 - The agent never gets a `pay` tool. Payment executes only inside apps/proxy after evaluate() returns ALLOW.
 - Razorpay keys and the operator private key are never sent to apps/web or apps/agent.
 - Nothing from any other codebase is copied in.
-- Do not commit secrets. PRD.md / DEV-PROCESS.md are optional internal docs.
 
 Working style:
 - Before editing, state the plan in ≤ 8 bullets and list the files you will touch. Wait for confirmation on anything touching packages/policy or packages/audit.
