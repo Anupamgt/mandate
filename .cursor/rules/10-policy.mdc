@@ -1,0 +1,11 @@
+---
+description: Change control for the deterministic policy engine
+globs: packages/policy/**
+---
+This package is the product's guardrail. Rules:
+- Pure functions only. No imports from apps/*, no fetch, no Prisma, no LLM SDKs, no Date.now().
+- Check order is fixed (FR-11). Do not reorder checks.
+- Every reason code has a dedicated test that trips it and one boundary test where applicable.
+- Coverage must remain 100% branches. Run `pnpm test --filter @mandate/policy -- --coverage` and paste the summary.
+- Do not add configuration flags that bypass a check.
+- Any change to evaluate()'s signature requires updating ARCHITECTURE.md (and the attached PRD §6.2) first and saying so.

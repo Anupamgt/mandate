@@ -1,0 +1,11 @@
+---
+description: Change control for the hash-chained audit log
+globs: packages/audit/**
+---
+This package is the evidence surface. Rules:
+- Append-only. No UPDATE/DELETE path, no "repair" helper that rewrites hashes.
+- `hash = sha256(prev_hash ‖ canonical_json(row without hash))`. Canonical JSON is byte-stable.
+- Event types are the closed enum in packages/shared. Unknown event → fail closed, do not log a silent skip.
+- `pnpm audit:verify` must report the first break seq. Tests: RT-10 (edit one SQLite row).
+- No I/O besides the log store passed in. No LLM. No Date.now() inside hash computation; `ts` is an argument.
+- Second-opinion review required before merge, same as packages/policy.

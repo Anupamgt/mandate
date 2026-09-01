@@ -1,0 +1,15 @@
+[
+  {
+    "seq": 1,
+    "ts": "2026-09-01T00:00:00.000Z",
+    "mandateId": "m1",
+    "spendRequestId": null,
+    "eventType": "MANDATE_ISSUED",
+    "actor": "operator",
+    "payloadHash": "aa",
+    "decision": null,
+    "reasonCode": null,
+    "prevHash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "hash": "98379055ddd65674cfc2ce7645c7395ab9257bf8e536acb133c72774d0d8ba78"
+  }
+]

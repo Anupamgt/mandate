@@ -1,0 +1,84 @@
+{
+  "probedAt": "2026-09-01T17:31:35.368Z",
+  "keyPrefix": "rzp_test_",
+  "winner": "s2s_order",
+  "rails": {
+    "payments": {
+      "status": 200,
+      "err": null
+    },
+    "orders": {
+      "status": 200,
+      "err": null
+    },
+    "refunds": {
+      "status": 200,
+      "err": null
+    },
+    "payouts": {
+      "status": 400,
+      "err": "Access to requested resource not available"
+    },
+    "contacts": {
+      "status": 200,
+      "err": null
+    },
+    "fund_accounts": {
+      "status": 200,
+      "err": null
+    }
+  },
+  "mcp": {
+    "url": "https://mcp.razorpay.com/mcp",
+    "initStatus": 200,
+    "listStatus": 200,
+    "session": false,
+    "initError": null,
+    "listError": null,
+    "toolCount": 42,
+    "toolNames": [
+      "capture_payment",
+      "create_order",
+      "create_payment_link",
+      "create_qr_code",
+      "create_registration_link",
+      "detect_stack",
+      "fetch_all_instant_settlements",
+      "fetch_all_orders",
+      "fetch_all_payment_links",
+      "fetch_all_payments",
+      "fetch_all_payouts",
+      "fetch_all_qr_codes",
+      "fetch_all_refunds",
+      "fetch_all_settlements",
+      "fetch_instant_settlement_with_id",
+      "fetch_multiple_refunds_for_payment",
+      "fetch_order",
+      "fetch_order_payments",
+      "fetch_payment",
+      "fetch_payment_card_details",
+      "fetch_payment_link",
+      "fetch_payments_for_qr_code",
+      "fetch_payout_with_id",
+      "fetch_qr_code",
+      "fetch_qr_codes_by_customer_id",
+      "fetch_qr_codes_by_payment_id",
+      "fetch_refund",
+      "fetch_settlement_recon_details",
+      "fetch_settlement_with_id",
+      "fetch_specific_refund_for_payment",
+      "fetch_tokens",
+      "initiate_payment",
+      "integrate_razorpay_checkout",
+      "payment_link_notify",
+      "payment_link_upi_create",
+      "resend_otp",
+      "revoke_token",
+      "submit_otp",
+      "update_order",
+      "update_payment",
+      "update_payment_link",
+      "update_refund"
+    ]
+  }
+}

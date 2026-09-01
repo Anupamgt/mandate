@@ -1,0 +1,16 @@
+{
+  "name": "@mandate/policy",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "dependencies": {
+    "@mandate/mandate": "workspace:*",
+    "@mandate/shared": "workspace:*"
+  }
+}

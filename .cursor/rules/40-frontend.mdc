@@ -1,0 +1,10 @@
+---
+description: Dashboard — no secrets, no policy in the browser
+globs: apps/web/**
+---
+Next.js 15 App Router. The dashboard is an operator client.
+- Never send Razorpay keys or the operator private key to the browser. Signing happens client-side; proxy verifies with the public key.
+- Decisions, remaining budget, and audit rows come from the proxy REST/SSE APIs. Do not re-implement evaluate() in the UI.
+- NL mandate drafting (FR-05) returns a schema-constrained draft only. The LLM never signs.
+- Step-up approval is an operator-signed record (SEC-05), not a cookie or a boolean toggle.
+- Integer paise in display: format for humans, store and POST as integers.

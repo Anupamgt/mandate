@@ -1,0 +1,32 @@
+{
+  "name": "mandate",
+  "type": "module",
+  "private": true,
+  "packageManager": "pnpm@11.25.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "postinstall": "pnpm db:generate",
+    "typecheck": "pnpm db:generate && tsc -b",
+    "test": "vitest run",
+    "test:policy": "vitest run packages/policy/src",
+    "db:generate": "pnpm --filter @mandate/db generate",
+    "dev": "pnpm db:push && node scripts/dev.mjs",
+    "db:push": "pnpm --filter @mandate/db push",
+    "dev:proxy": "pnpm --filter @mandate/proxy dev",
+    "dev:resource": "pnpm --filter @mandate/resource-server dev",
+    "dev:web": "pnpm --filter @mandate/web dev",
+    "dev:mcp": "pnpm --filter @mandate/proxy mcp",
+    "batch": "tsx apps/agent/src/batch.ts",
+    "redteam": "tsx apps/agent/src/redteam.ts",
+    "audit:verify": "tsx packages/audit/src/cli/verify.ts",
+    "check": "pnpm typecheck && pnpm test && pnpm batch && pnpm redteam"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

@@ -1,0 +1,24 @@
+---
+description: Mandate — governance proxy for agent payments. Always apply.
+alwaysApply: true
+---
+You are building Mandate. Read ARCHITECTURE.md before starting any task; do not infer requirements that are not written there.
+
+Stack: pnpm monorepo, TypeScript strict, Hono (apps/proxy), Next.js 15 App Router (apps/web), Prisma + SQLite, zod, vitest, @noble/ed25519, @modelcontextprotocol/sdk. Do not add dependencies without listing them and the reason in your final message.
+
+Non-negotiables:
+- All money is integer paise (type Paise). Never floats.
+- packages/policy has NO I/O, NO LLM calls, NO Date.now() — time is passed in.
+- Fail closed: unknown tool, unknown event type, unknown reason code → DENY.
+- Reason codes and event types are closed enums in packages/shared. Adding one requires updating the exhaustiveness tests.
+- The agent never gets a `pay` tool. Payment executes only inside apps/proxy after evaluate() returns ALLOW.
+- Razorpay keys and the operator private key are never sent to apps/web or apps/agent.
+- Nothing from any other codebase is copied in.
+- Do not commit secrets. PRD.md / DEV-PROCESS.md are optional internal docs.
+
+Working style:
+- Before editing, state the plan in ≤ 8 bullets and list the files you will touch. Wait for confirmation on anything touching packages/policy or packages/audit.
+- Write or update the test first, then the implementation, then run `pnpm test --filter <pkg>` and paste the result.
+- If a task's acceptance criterion cannot be met as written, stop and say so; do not redefine it.
+- Prefer small, complete diffs. Do not refactor files you were not asked to touch.
+- End every task with: files changed, tests run + results, anything you were unsure about, the PRD IDs you consider satisfied.

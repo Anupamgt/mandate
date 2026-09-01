@@ -1,0 +1,21 @@
+{
+  "total": 50,
+  "allowed": 15,
+  "denied_by_reason": {
+    "PER_TXN_CAP_EXCEEDED": 10,
+    "COUNTERPARTY_NOT_ALLOWED": 8,
+    "TOOL_UNCLASSIFIED": 5,
+    "TOOL_NOT_ALLOWED": 3,
+    "WINDOW_EXPIRED": 4
+  },
+  "step_ups": 5,
+  "false_allows": 0,
+  "false_denies": 0,
+  "exceptions_raised": 3,
+  "exceptions_resolved": 3,
+  "paise_withheld": 220000,
+  "paise_reversed": 3000,
+  "residual_paise": 0,
+  "decision_latency_p50_ms": 16.311211000000185,
+  "decision_latency_p99_ms": 34.20882299999994
+}

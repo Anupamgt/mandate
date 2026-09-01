@@ -1,0 +1,218 @@
+{
+  "source": "https://mcp.razorpay.com/mcp",
+  "dumpedAt": "2026-09-01T17:31:35.368Z",
+  "tools": [
+    {
+      "name": "capture_payment",
+      "description": "Use this tool to capture a previously authorized payment. Only payments with 'authorized' status can be captured",
+      "class": "MONEY_IN"
+    },
+    {
+      "name": "create_order",
+      "description": "Create a new order in Razorpay. Supports both regular orders and mandate orders. \n\nFor REGULAR ORDERS: Provide amount, currency, and optional receipt/notes. \n\nF",
+      "class": "MONEY_IN"
+    },
+    {
+      "name": "create_payment_link",
+      "description": "Create a new standard payment link in Razorpay with a specified amount",
+      "class": "MONEY_IN"
+    },
+    {
+      "name": "create_qr_code",
+      "description": "Create a new QR code in Razorpay that can be used to accept UPI payments",
+      "class": "MONEY_IN"
+    },
+    {
+      "name": "create_registration_link",
+      "description": "Create a registration link (auth link) for subscription registration in Razorpay to set up recurring payments via card, emandate, NACH, or UPI.",
+      "class": "MONEY_IN"
+    },
+    {
+      "name": "detect_stack",
+      "description": "Detect the technology stack of a project based on file information. Returns language, framework, frontend framework, and package manager. IMPORTANT: Always call",
+      "class": "READ"
+    },
+    {
+      "name": "fetch_all_instant_settlements",
+      "description": "Fetch all instant settlements with optional filtering, pagination, and payout details",
+      "class": "READ"
+    },
+    {
+      "name": "fetch_all_orders",
+      "description": "Fetch all orders with optional filtering and pagination",
+      "class": "READ"
+    },
+    {
+      "name": "fetch_all_payment_links",
+      "description": "Fetch all payment links with optional filtering by payment ID or reference ID.You can specify the upi_link parameter to filter by link type.",
+      "class": "READ"
+    },
+    {
+      "name": "fetch_all_payments",
+      "description": "Fetch all payments with optional filtering and pagination",
+      "class": "READ"
+    },
+    {
+      "name": "fetch_all_payouts",
+      "description": "Fetch all payouts for a bank account number",
+      "class": "READ"
+    },
+    {
+      "name": "fetch_all_qr_codes",
+      "description": "Fetch all QR codes with optional filtering and pagination",
+      "class": "READ"
+    },
+    {
+      "name": "fetch_all_refunds",
+      "description": "Use this tool to retrieve details of all refunds. By default, only the last 10 refunds are returned.",
+      "class": "READ"
+    },
+    {
+      "name": "fetch_all_settlements",
+      "description": "Fetch all settlements with optional filtering and pagination",
+      "class": "READ"
+    },
+    {
+      "name": "fetch_instant_settlement_with_id",
+      "description": "Fetch details of a specific instant settlement using its ID",
+      "class": "READ"
+    },
+    {
+      "name": "fetch_multiple_refunds_for_payment",
+      "description": "Use this tool to retrieve multiple refunds for a payment. By default, only the last 10 refunds are returned.",
+      "class": "READ"
+    },
+    {
+      "name": "fetch_order",
+      "description": "Fetch an order's details using its ID",
+      "class": "READ"
+    },
+    {
+      "name": "fetch_order_payments",
+      "description": "Fetch all payments made for a specific order in Razorpay",
+      "class": "READ"
+    },
+    {
+      "name": "fetch_payment",
+      "description": "Use this tool to retrieve the details of a specific payment using its id. Amount returned is in paisa",
+      "class": "READ"
+    },
+    {
+      "name": "fetch_payment_card_details",
+      "description": "Use this tool to retrieve the details of the card used to make a payment. Only works for payments made using a card.",
+      "class": "READ"
+    },
+    {
+      "name": "fetch_payment_link",
+      "description": "Fetch payment link details using it's ID. Response contains the basic details like amount, status etc. The link could be of any type(standard or UPI)",
+      "class": "READ"
+    },
+    {
+      "name": "fetch_payments_for_qr_code",
+      "description": "Fetch all payments made on a QR code",
+      "class": "READ"
+    },
+    {
+      "name": "fetch_payout_with_id",
+      "description": "Fetch a payout's details using its ID",
+      "class": "READ"
+    },
+    {
+      "name": "fetch_qr_code",
+      "description": "Fetch a QR code's details using it's ID",
+      "class": "READ"
+    },
+    {
+      "name": "fetch_qr_codes_by_customer_id",
+      "description": "Fetch all QR codes for a specific customer",
+      "class": "READ"
+    },
+    {
+      "name": "fetch_qr_codes_by_payment_id",
+      "description": "Fetch all QR codes for a specific payment",
+      "class": "READ"
+    },
+    {
+      "name": "fetch_refund",
+      "description": "Use this tool to retrieve the details of a specific refund using its id.",
+      "class": "READ"
+    },
+    {
+      "name": "fetch_settlement_recon_details",
+      "description": "Fetch settlement reconciliation report for a specific time period",
+      "class": "READ"
+    },
+    {
+      "name": "fetch_settlement_with_id",
+      "description": "Fetch details of a specific settlement using its ID",
+      "class": "READ"
+    },
+    {
+      "name": "fetch_specific_refund_for_payment",
+      "description": "Use this tool to retrieve details of a specific refund made for a payment.",
+      "class": "READ"
+    },
+    {
+      "name": "fetch_tokens",
+      "description": "Get all saved payment methods (cards, UPI) for a customer. Accepts either a customer_id (preferred) or a contact number. When customer_id is provided it is used",
+      "class": "READ"
+    },
+    {
+      "name": "initiate_payment",
+      "description": "Initiate a payment using the S2S JSON v1 flow. Required parameters: amount and order_id. For saved payment methods, provide token. For UPI collect flow, provide",
+      "class": "MONEY_IN"
+    },
+    {
+      "name": "integrate_razorpay_checkout",
+      "description": "Complete Razorpay Standard Checkout integration. Returns ALL code needed - backend routes, frontend integration, and payment verification. IMPORTANT: Before cal",
+      "class": "MONEY_IN"
+    },
+    {
+      "name": "payment_link_notify",
+      "description": "Send or resend notification for a payment link via SMS or email.",
+      "class": "READ"
+    },
+    {
+      "name": "payment_link_upi_create",
+      "description": "Create a new UPI payment link in Razorpay with a specified amount and additional options.",
+      "class": "MONEY_IN"
+    },
+    {
+      "name": "resend_otp",
+      "description": "Resend OTP to the customer's registered mobile number if the previous OTP was not received or has expired.",
+      "class": "MONEY_IN"
+    },
+    {
+      "name": "revoke_token",
+      "description": "Revoke a saved payment method (token) for a customer. This tool revokes the specified token associated with the given customer ID. Once revoked, the token canno",
+      "class": "READ"
+    },
+    {
+      "name": "submit_otp",
+      "description": "Verify and submit the OTP received by the customer to complete the payment authentication process.",
+      "class": "MONEY_IN"
+    },
+    {
+      "name": "update_order",
+      "description": "Use this tool to update the notes for a specific order. Only the notes field can be modified.",
+      "class": "MONEY_IN"
+    },
+    {
+      "name": "update_payment",
+      "description": "Use this tool to update the notes field of a payment. Notes are key-value pairs that can be used to store additional information.",
+      "class": "MONEY_IN"
+    },
+    {
+      "name": "update_payment_link",
+      "description": "Update any existing standard or UPI payment link with new details such as reference ID, expiry date, or notes.",
+      "class": "MONEY_IN"
+    },
+    {
+      "name": "update_refund",
+      "description": "Use this tool to update the notes for a specific refund. Only the notes field can be modified.",
+      "class": "MONEY_OUT"
+    }
+  ],
+  "railDecision": "s2s_order",
+  "note": "GET /v1/payouts returned 400; no create_payout MCP tool. pay() = create_order + test payment; reverse() = refund."
+}
