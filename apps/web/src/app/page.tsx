@@ -12,8 +12,13 @@ import { Label } from "@/components/ui/label";
 import { ExceptionsPanel } from "@/components/exceptions-panel";
 import { NlMandateForm } from "@/components/nl-mandate-form";
 import { formatRupeesFromPaise, parsePaiseInput } from "@/lib/format";
-import { liveEventFromLocal, liveEventFromSse, type LiveEvent } from "@/lib/live-events";
 import { loadMandateRows, revokeRequestBody, toMandateList, type Mandate } from "@/lib/mandates";
+import {
+  activityFromAuditRow,
+  activityFromSpendResult,
+  mergeActivity,
+  type ActivityRow,
+} from "@/lib/rationale";
 
 const PROXY = process.env.NEXT_PUBLIC_PROXY_URL ?? "http://127.0.0.1:18787";
 
@@ -72,6 +77,7 @@ type Decision = {
   checks?: string[];
   proof?: { invoice_id: string; mac: string; resource: string; expires_at: string };
   error?: string;
+  rationale?: string;
 };
 
 function relativeTime(ts: number, now: number): string {
@@ -104,7 +110,7 @@ function Chevron({ open }: { open: boolean }) {
 export default function Page() {
   const [keys, setKeys] = useState<{ pub: string; priv: string } | null>(null);
   const [mandates, setMandates] = useState<Mandate[]>([]);
-  const [events, setEvents] = useState<LiveEvent[]>([]);
+  const [events, setEvents] = useState<ActivityRow[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [amount, setAmount] = useState("1000");
@@ -202,11 +208,22 @@ export default function Page() {
       es = new EventSource(`${PROXY}/events`);
       es.addEventListener("open", () => setSseOn(true));
       es.addEventListener("decision", (ev) => {
-        const next = liveEventFromSse(JSON.parse((ev as MessageEvent).data));
-        setEvents((prev) => {
-          if (prev.some((p) => p.id === next.id)) return prev;
-          return [next, ...prev].slice(0, 16);
+        const row = JSON.parse((ev as MessageEvent).data) as {
+          seq?: number;
+          reasonCode?: string;
+          decision?: string;
+          ts?: string;
+          spendRequestId?: string;
+          eventType?: string;
+          rationale?: string | null;
+          checks?: unknown;
+        };
+        const mapped = activityFromAuditRow({
+          ...row,
+          eventType: row.eventType ?? "DECISION",
         });
+        if (!mapped) return;
+        setEvents((prev) => mergeActivity(prev, [{ ...mapped, source: "stream" }]));
       });
       es.onerror = () => {
         setSseOn(false);
@@ -220,6 +237,40 @@ export default function Page() {
       stopped = true;
       if (retry) clearTimeout(retry);
       es?.close();
+    };
+  }, []);
+
+  useEffect(() => {
+    let stopped = false;
+    async function loadAudit() {
+      try {
+        const res = await fetch(`${PROXY}/audit`);
+        if (!res.ok || stopped) return;
+        const json = (await res.json()) as {
+          rows?: Array<{
+            seq?: number;
+            ts?: string;
+            spendRequestId?: string | null;
+            eventType?: string;
+            decision?: string | null;
+            reasonCode?: string | null;
+            rationale?: string | null;
+          }>;
+        };
+        const mapped = (json.rows ?? [])
+          .map((row) => activityFromAuditRow(row))
+          .filter((row): row is ActivityRow => row !== null);
+        if (mapped.length === 0) return;
+        setEvents((prev) => mergeActivity(prev, mapped));
+      } catch {
+        /* proxy down */
+      }
+    }
+    void loadAudit();
+    const t = setInterval(() => void loadAudit(), 8000);
+    return () => {
+      stopped = true;
+      clearInterval(t);
     };
   }, []);
 
@@ -316,11 +367,14 @@ export default function Page() {
         }),
       });
       const json = (await res.json()) as Decision;
-      const next = liveEventFromLocal(json);
-      setEvents((prev) => {
-        if (prev.some((p) => p.id === next.id)) return prev;
-        return [next, ...prev].slice(0, 16);
-      });
+      setEvents((prev) =>
+        mergeActivity(prev, [
+          activityFromSpendResult({
+            ...json,
+            ts: new Date().toISOString(),
+          }),
+        ]),
+      );
       await refresh();
     } catch (e) {
       setError(String(e));
@@ -577,6 +631,7 @@ export default function Page() {
             <h2 className="text-2xl font-semibold tracking-tight">Propose spend</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
               Goes through evaluate(). Amount is integer paise, shown live as rupees. Unknown tools fail closed.
+              Agent rationale is stored on the spend (informational; never passed to evaluate()).
             </p>
             <Card className="mt-6">
               <CardContent className="space-y-4 pt-5">
@@ -633,7 +688,8 @@ export default function Page() {
           <section id="activity" className="scroll-mt-24 mt-16">
             <h2 className="text-2xl font-semibold tracking-tight">Live activity</h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              SSE from the proxy: decision, reason code, and checks[]. Plus decisions from this browser.
+              SSE from the proxy: decision, reason code, and checks[]. Rationale is joined from SpendRequest when the
+              stream row omits it.
             </p>
             <Card className="mt-6">
               <CardHeader>
@@ -663,8 +719,13 @@ export default function Page() {
                               ))}
                             </ul>
                           ) : null}
+                          {ev.rationale ? (
+                            <p className="mt-1 max-w-xl text-xs leading-5 text-muted-foreground">
+                              Rationale (informational): {ev.rationale}
+                            </p>
+                          ) : null}
                           <p className="mt-1 text-xs text-muted-foreground">
-                            {relativeTime(Date.parse(ev.ts) || nowTick, nowTick)} · {ev.source === "stream" ? "stream" : "this session"}
+                            {relativeTime(Date.parse(ev.ts) || nowTick, nowTick)} · {ev.source === "stream" ? "stream" : ev.source === "audit" ? "audit" : "this session"}
                           </p>
                         </div>
                         <Badge variant={statusVariant(ev.reason)}>{ev.decision}</Badge>

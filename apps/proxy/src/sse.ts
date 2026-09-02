@@ -7,6 +7,7 @@ export type DecisionSsePayload = {
   decision: string | null;
   reasonCode: string | null;
   checks: string[];
+  rationale: string;
 };
 
 export function parseChecksJson(raw: string | null | undefined): string[] {
@@ -27,6 +28,7 @@ export function decisionSsePayload(
     spendRequestId: string | null;
     decision: string | null;
     reasonCode: string | null;
+    rationale?: string | null;
   },
   checks: readonly string[],
 ): DecisionSsePayload {
@@ -37,5 +39,6 @@ export function decisionSsePayload(
     decision: row.decision,
     reasonCode: row.reasonCode,
     checks: [...checks],
+    rationale: row.rationale ?? "",
   };
 }

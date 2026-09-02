@@ -1,5 +1,9 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { signMandateBody, signRevocation, signApproval, parseMandateBody } from "@mandate/mandate";
+import type { SpendReq } from "@mandate/policy";
 import { makeTestProxy } from "./harness.js";
 
 const body = {
@@ -408,6 +412,125 @@ describe("REST gate", () => {
     expect(payload.reasonCode).toBe("PER_TXN_CAP_EXCEEDED");
     expect(payload.checks).toEqual(denied.checks);
     expect(payload.spendRequestId).toBe(denied.spend_request_id);
+  });
+
+  it("FR-44 rationale is persisted and returned without entering evaluate()", async () => {
+    const { app, keys, deps } = await makeTestProxy();
+    const parsed = parseMandateBody(body);
+    const signature = await signMandateBody(parsed, keys.privateKeyHex);
+    await app.request("/mandates", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ body: parsed, signature }),
+    });
+
+    const longRationale = `need GPU for demo ${"x".repeat(300)}`;
+    const proposed = await app.request("/spend/propose", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        agent_id: "agent_demo",
+        tool: "create_order",
+        counterparty_id: "prov_compute_a",
+        amount_paise: 1000,
+        purpose: "ok",
+        rationale: longRationale,
+        resource: "compute/run",
+      }),
+    });
+    const json = (await proposed.json()) as {
+      spend_request_id: string;
+      decision: string;
+      reason_code: string;
+      rationale: string;
+    };
+    expect(json.decision).toBe("ALLOW");
+    expect(json.reason_code).toBe("ALLOW");
+    expect(json.rationale).toBe(longRationale.slice(0, 256));
+    expect(json.rationale.length).toBe(256);
+
+    const stored = await deps.prisma.spendRequest.findUniqueOrThrow({
+      where: { id: json.spend_request_id },
+    });
+    expect(stored.rationale).toBe(longRationale.slice(0, 256));
+
+    const audit = await app.request("/audit");
+    const auditJson = (await audit.json()) as {
+      rows: Array<{ eventType: string; spendRequestId: string | null; rationale?: string }>;
+    };
+    const spendRows = auditJson.rows.filter((r) => r.spendRequestId === json.spend_request_id);
+    expect(spendRows.length).toBeGreaterThan(0);
+    for (const row of spendRows) {
+      expect(row.rationale).toBe(longRationale.slice(0, 256));
+    }
+
+    const other = await app.request("/spend/propose", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        agent_id: "agent_demo",
+        tool: "create_order",
+        counterparty_id: "prov_compute_a",
+        amount_paise: 1000,
+        purpose: "ok",
+        rationale: "a totally different story",
+        resource: "compute/run",
+        invoice_id: "inv_fr44_other",
+      }),
+    });
+    const otherJson = (await other.json()) as { decision: string; reason_code: string; rationale: string };
+    expect(otherJson.decision).toBe("ALLOW");
+    expect(otherJson.reason_code).toBe("ALLOW");
+    expect(otherJson.rationale).toBe("a totally different story");
+  });
+
+  it("FR-44 pending-approvals include truncated rationale", async () => {
+    const { app, keys } = await makeTestProxy();
+    const parsed = parseMandateBody(body);
+    const signature = await signMandateBody(parsed, keys.privateKeyHex);
+    await app.request("/mandates", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ body: parsed, signature }),
+    });
+    const step = await app.request("/spend/propose", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        agent_id: "agent_demo",
+        tool: "create_order",
+        counterparty_id: "prov_compute_a",
+        amount_paise: 8001,
+        purpose: "needs step-up",
+        rationale: `please ${"y".repeat(300)}`,
+      }),
+    });
+    const stepped = (await step.json()) as { spend_request_id: string; rationale: string };
+    expect(stepped.rationale.length).toBe(256);
+    const inbox = await app.request("/spend/pending-approvals");
+    const listed = (await inbox.json()) as {
+      pending: Array<{ spend_request_id: string; rationale: string }>;
+    };
+    const row = listed.pending.find((p) => p.spend_request_id === stepped.spend_request_id);
+    expect(row?.rationale).toBe(stepped.rationale);
+    expect(row?.rationale.length).toBe(256);
+  });
+
+  it("FR-44 evaluate() args and policy SpendReq omit rationale", () => {
+    type HasRationale = "rationale" extends keyof SpendReq ? true : false;
+    const hasRationale: HasRationale = false;
+    expect(hasRationale).toBe(false);
+
+    const here = dirname(fileURLToPath(import.meta.url));
+    const policySrc = readFileSync(join(here, "../../../packages/policy/src/evaluate.ts"), "utf8");
+    const spendSrc = readFileSync(join(here, "spend.ts"), "utf8");
+    expect(policySrc).not.toMatch(/rationale/);
+
+    const evaluateArgs = [...spendSrc.matchAll(/await evaluate\(\s*\{([^}]+)\}/g)].map((m) => m[1] ?? "");
+    expect(evaluateArgs.length).toBeGreaterThanOrEqual(2);
+    for (const args of evaluateArgs) {
+      expect(args).not.toMatch(/rationale/);
+    }
   });
 });
 

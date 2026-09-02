@@ -39,6 +39,7 @@ type PendingApproval = {
   purpose: string;
   status: string;
   reason_code?: string;
+  rationale?: string;
 };
 
 export default function ApprovalsPage() {
@@ -155,6 +156,11 @@ export default function ApprovalsPage() {
                     <p className="text-xs text-muted-foreground">
                       {formatRupeesFromPaise(item.amount_paise)} · {item.tool} · {item.purpose}
                     </p>
+                    {item.rationale ? (
+                      <p className="mt-1 max-w-md text-xs leading-5 text-muted-foreground">
+                        Rationale (informational): {item.rationale}
+                      </p>
+                    ) : null}
                     <p className="mt-1 font-mono text-[11px] text-muted-foreground">{item.spend_request_id}</p>
                   </div>
                   <Button size="sm" onClick={() => void approve(item)} disabled={busy !== null}>

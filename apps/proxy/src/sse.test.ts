@@ -24,6 +24,7 @@ describe("FR-71 SSE decision payload", () => {
       decision: "DENY",
       reasonCode: "PER_TXN_CAP_EXCEEDED",
       checks: ["signature:pass", "status:pass", "window:pass", "per_txn:exceeded"],
+      rationale: "",
     });
   });
 

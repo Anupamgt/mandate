@@ -25,7 +25,7 @@ Ordered by the release plan. One Cursor Agent session per line. Do not start P2 
 - [x] T-021  FR-73    step-up inbox
 - [x] T-022  FR-05/74 NL authoring
 - [x] T-023  FR-52/72 Explain narrative
-- [ ] T-024  FR-44    rationale visible
+- [x] T-024  FR-44    rationale visible
 - [ ] T-025  FR-82    re-run pnpm redteam + pnpm check before v0.4.0
 - [ ] T-026  FR-83    README draft (human rewrites limitations)
 - [ ] T-027           video timing only (150 wpm, PRD §12)

@@ -189,6 +189,38 @@ export async function revokeMandate(
   });
 }
 
+const RATIONALE_MAX = 256;
+
+export function truncateRationale(raw: unknown): string {
+  return String(raw ?? "").slice(0, RATIONALE_MAX);
+}
+
+/** FR-44: join SpendRequest.rationale onto audit/SSE rows. Informational only. */
+export async function attachRationale<T extends { spendRequestId: string | null }>(
+  prisma: PrismaClient,
+  rows: T[],
+): Promise<Array<T & { rationale: string }>> {
+  const ids = [
+    ...new Set(
+      rows
+        .map((r) => r.spendRequestId)
+        .filter((id): id is string => typeof id === "string" && id.length > 0),
+    ),
+  ];
+  if (ids.length === 0) {
+    return rows.map((r) => ({ ...r, rationale: "" }));
+  }
+  const spends = await prisma.spendRequest.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, rationale: true },
+  });
+  const byId = new Map(spends.map((s) => [s.id, truncateRationale(s.rationale)]));
+  return rows.map((r) => ({
+    ...r,
+    rationale: r.spendRequestId ? (byId.get(r.spendRequestId) ?? "") : "",
+  }));
+}
+
 type ProposeInput = {
   agentId: string;
   tool: string;
@@ -255,6 +287,7 @@ async function proposeSpendInner(deps: ProxyDeps, input: ProposeInput) {
 
   const spendId = randomUUID();
   const invoiceId = input.invoiceId ?? randomUUID();
+  const rationale = truncateRationale(input.rationale);
 
   if (mandateRow) {
     await deps.prisma.spendRequest.create({
@@ -266,7 +299,7 @@ async function proposeSpendInner(deps: ProxyDeps, input: ProposeInput) {
         counterpartyId,
         amountPaise: input.amountPaise,
         purpose: input.purpose,
-        rationale: (input.rationale ?? "").slice(0, 256),
+        rationale,
         invoiceId,
         status: "PROPOSED",
       },
@@ -276,7 +309,7 @@ async function proposeSpendInner(deps: ProxyDeps, input: ProposeInput) {
       spendRequestId: spendId,
       eventType: "SPEND_PROPOSED",
       actor: input.agentId,
-      payload: { tool: input.tool, amountPaise: input.amountPaise, rationale: input.rationale ?? "" },
+      payload: { tool: input.tool, amountPaise: input.amountPaise, rationale },
       ts: now,
     });
   }
@@ -314,7 +347,7 @@ async function proposeSpendInner(deps: ProxyDeps, input: ProposeInput) {
       });
       await deps.prisma.spendRequest.update({ where: { id: spendId }, data: { status: "DENY" } });
     }
-    return { spend_request_id: spendId, ...limited };
+    return { spend_request_id: spendId, rationale, ...limited };
   }
 
   const decision = await evaluate(
@@ -357,7 +390,7 @@ async function proposeSpendInner(deps: ProxyDeps, input: ProposeInput) {
     if (mandateRow) {
       await deps.prisma.spendRequest.update({ where: { id: spendId }, data: { status: decision.decision } });
     }
-    return { spend_request_id: spendId, ...decision };
+    return { spend_request_id: spendId, rationale, ...decision };
   }
 
   return reserveThenPay(deps, {
@@ -369,6 +402,7 @@ async function proposeSpendInner(deps: ProxyDeps, input: ProposeInput) {
     resource: input.resource ?? "compute/run",
     checks: decision.checks,
     failProvision: Boolean(input.failProvision),
+    rationale,
   });
 }
 
@@ -383,6 +417,7 @@ async function reserveThenPay(
     resource: string;
     checks: readonly string[];
     failProvision?: boolean;
+    rationale: string;
   },
 ) {
   const now = deps.now();
@@ -437,6 +472,7 @@ async function reserveThenPay(
       });
       return {
         spend_request_id: args.spendId,
+        rationale: args.rationale,
         decision: "DENY" as const,
         reason_code: code,
         checks: ["reserve:fail"],
@@ -529,6 +565,7 @@ async function reserveThenPay(
     await deps.prisma.spendRequest.update({ where: { id: args.spendId }, data: { status: "EXCEPTION" } });
     return {
       spend_request_id: args.spendId,
+      rationale: args.rationale,
       decision: "ALLOW" as const,
       reason_code: "ALLOW" as const,
       checks: args.checks,
@@ -548,6 +585,7 @@ async function reserveThenPay(
   await deps.prisma.spendRequest.update({ where: { id: args.spendId }, data: { status: "SETTLED" } });
   return {
     spend_request_id: args.spendId,
+    rationale: args.rationale,
     decision: "ALLOW" as const,
     reason_code: "ALLOW" as const,
     checks: args.checks,
@@ -664,6 +702,7 @@ export async function listPendingApprovals(deps: ProxyDeps) {
       counterparty_id: row.counterpartyId,
       amount_paise: row.amountPaise,
       purpose: row.purpose,
+      rationale: truncateRationale(row.rationale),
       status: row.status,
       reason_code: row.decision?.reasonCode ?? "STEP_UP_THRESHOLD",
       decided_at: row.decision?.decidedAt.toISOString() ?? null,
@@ -705,6 +744,7 @@ export async function approveStepUp(
   }
 
   const now = deps.now();
+  const rationale = truncateRationale(spend.rationale);
   const mandateView = {
     body: parseMandateBody(JSON.parse(spend.mandate.bodyJson)),
     signature: spend.mandate.signature,
@@ -728,6 +768,7 @@ export async function approveStepUp(
   if (decision.decision === "DENY") {
     return {
       spend_request_id: spendId,
+      rationale,
       decision: decision.decision,
       reason_code: decision.reason_code,
       checks: decision.checks,
@@ -756,6 +797,7 @@ export async function approveStepUp(
       invoiceId: spend.invoiceId ?? randomUUID(),
       resource: "compute/run",
       checks: decision.checks,
+      rationale,
     }),
   );
 }
