@@ -1,24 +1,24 @@
 @import "tailwindcss";
 
-/* Razorpay Blade-aligned tokens: Prussian Blue #012652, Dodger Blue #0D94FB, Mulish. */
+/* Razorpay Docs dark shell: charcoal canvas, dodger blue accent. */
 @theme {
-  --color-background: #f4f6fa;
-  --color-foreground: #172b4d;
-  --color-card: #ffffff;
-  --color-card-foreground: #172b4d;
-  --color-muted: #f0f3f8;
-  --color-muted-foreground: #5e6c84;
-  --color-border: #e6eaf0;
-  --color-input: #dfe3eb;
+  --color-background: #0b0c10;
+  --color-foreground: #f4f6fb;
+  --color-card: #12141c;
+  --color-card-foreground: #f4f6fb;
+  --color-muted: #171922;
+  --color-muted-foreground: #9aa3b5;
+  --color-border: #232733;
+  --color-input: #232733;
   --color-primary: #0d94fb;
   --color-primary-foreground: #ffffff;
-  --color-secondary: #012652;
-  --color-secondary-foreground: #f4f5f7;
-  --color-destructive: #c9372c;
+  --color-secondary: #0e1118;
+  --color-secondary-foreground: #f4f6fb;
+  --color-destructive: #f07167;
   --color-ring: #0d94fb;
-  --color-success: #04aa6d;
-  --color-notice: #c17b00;
-  --font-sans: var(--font-mulish), "Muli", "Inter", system-ui, sans-serif;
+  --color-success: #3dd68c;
+  --color-notice: #f5c16c;
+  --font-sans: var(--font-inter), "Inter", "Mulish", system-ui, sans-serif;
   --font-mono: var(--font-ibm), ui-monospace, monospace;
 }
 
@@ -31,6 +31,10 @@ body {
 
 body {
   font-family: var(--font-sans);
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 @keyframes pulse-dot {
@@ -53,15 +57,6 @@ body {
   to {
     opacity: 1;
     transform: translateY(0);
-  }
-}
-
-@keyframes bar-fill {
-  from {
-    transform: scaleX(0);
-  }
-  to {
-    transform: scaleX(1);
   }
 }
 

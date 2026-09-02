@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { IBM_Plex_Mono, Mulish } from "next/font/google";
+import { IBM_Plex_Mono, Inter } from "next/font/google";
 import "./globals.css";
 
-const mulish = Mulish({
+const inter = Inter({
   subsets: ["latin"],
-  variable: "--font-mulish",
+  variable: "--font-inter",
   weight: ["400", "500", "600", "700", "800"],
 });
 
@@ -23,7 +23,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body className={`${mulish.variable} ${ibm.variable} antialiased`}>{children}</body>
+      <body className={`${inter.variable} ${ibm.variable} antialiased`}>{children}</body>
     </html>
   );
 }

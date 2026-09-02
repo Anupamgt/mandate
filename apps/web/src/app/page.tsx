@@ -3,7 +3,7 @@
 import * as ed from "@noble/ed25519";
 import { sha512 } from "@noble/hashes/sha2.js";
 import { bytesToHex, hexToBytes, utf8ToBytes } from "@noble/hashes/utils";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,11 +28,20 @@ const AMOUNT_CHIPS = [
   { paise: 20000, hint: "Over per-txn cap" },
 ] as const;
 
-const NAV = [
+const PAGES = [
   { id: "snapshot", label: "Snapshot" },
-  { id: "mandate", label: "Mandate" },
-  { id: "spend", label: "Spend" },
+  { id: "mandate", label: "Issue a mandate" },
+  { id: "spend", label: "Propose spend" },
   { id: "activity", label: "Live activity" },
+  { id: "how-it-works", label: "How evaluate() works" },
+] as const;
+
+const TOC = [
+  { id: "snapshot", label: "Snapshot" },
+  { id: "mandate", label: "Issue a mandate" },
+  { id: "spend", label: "Propose spend" },
+  { id: "activity", label: "Live activity" },
+  { id: "how-it-works", label: "How evaluate() works" },
 ] as const;
 
 function canonicalJson(value: unknown): string {
@@ -90,6 +99,18 @@ function statusVariant(code: string | undefined): "ok" | "deny" | "warn" | "defa
   return "deny";
 }
 
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`}
+      aria-hidden
+    >
+      <path fill="currentColor" d="M6 3.2 11.2 8 6 12.8 5.2 12 9.4 8 5.2 4z" />
+    </svg>
+  );
+}
+
 export default function Page() {
   const [keys, setKeys] = useState<{ pub: string; priv: string } | null>(null);
   const [mandates, setMandates] = useState<Mandate[]>([]);
@@ -105,6 +126,12 @@ export default function Page() {
   const [refreshedAt, setRefreshedAt] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [section, setSection] = useState("snapshot");
+  const [treeOpen, setTreeOpen] = useState(true);
+  const [search, setSearch] = useState("");
+  const [ask, setAsk] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [benefitsOpen, setBenefitsOpen] = useState(true);
+  const [mcpOpen, setMcpOpen] = useState(false);
 
   const selected = mandates[0];
   const remainingPct = useMemo(() => {
@@ -113,6 +140,10 @@ export default function Page() {
   }, [selected]);
   const spentPct = 100 - remainingPct;
   const parsedAmount = parsePaiseInput(amount);
+  const pageIndex = PAGES.findIndex((p) => p.id === section);
+  const prevPage = pageIndex > 0 ? PAGES[pageIndex - 1] : undefined;
+  const nextPage = pageIndex >= 0 && pageIndex < PAGES.length - 1 ? PAGES[pageIndex + 1] : undefined;
+  const filteredToc = TOC.filter((item) => item.label.toLowerCase().includes(search.trim().toLowerCase()));
 
   const refresh = useCallback(async () => {
     try {
@@ -223,6 +254,25 @@ export default function Page() {
       if (retry) clearTimeout(retry);
       es?.close();
     };
+  }, []);
+
+  useEffect(() => {
+    const ids = TOC.map((item) => item.id);
+    const obs = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+        const id = visible[0]?.target.id;
+        if (id) setSection(id);
+      },
+      { rootMargin: "-18% 0px -64% 0px", threshold: [0, 0.2, 0.45, 0.7] },
+    );
+    for (const id of ids) {
+      const el = document.getElementById(id);
+      if (el) obs.observe(el);
+    }
+    return () => obs.disconnect();
   }, []);
 
   async function ensureKeys() {
@@ -345,65 +395,126 @@ export default function Page() {
     }
   }
 
-  function scrollTo(id: string) {
+  function goTo(id: string) {
     setSection(id);
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  return (
-    <div className="min-h-screen md:grid md:grid-cols-[220px_1fr]">
-      <aside className="bg-secondary text-secondary-foreground">
-        <div className="flex items-center gap-3 px-5 py-5">
-          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-sm font-extrabold">
-            M
-          </span>
-          <div>
-            <p className="text-sm font-semibold tracking-tight">Mandate</p>
-            <p className="text-[11px] text-white/60">Razorpay test mode</p>
-          </div>
-        </div>
-        <nav className="flex gap-1 overflow-x-auto px-3 pb-3 md:flex-col md:overflow-visible">
-          {NAV.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => scrollTo(item.id)}
-              className={`rounded-md px-3 py-2 text-left text-sm transition-colors ${
-                section === item.id ? "bg-white/10 text-white" : "text-white/70 hover:bg-white/10 hover:text-white"
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
-        </nav>
-        <div className="hidden border-t border-white/10 px-5 py-4 text-xs text-white/55 md:block">
-          Agent never gets a pay tool. Policy is evaluate() on the proxy.
-        </div>
-      </aside>
+  function jumpFromQuery(q: string) {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return;
+    const hit = TOC.find((item) => item.label.toLowerCase().includes(needle) || item.id.includes(needle));
+    if (hit) {
+      goTo(hit.id);
+      setAsk("");
+      setSearch("");
+    }
+  }
 
-      <div className="min-w-0">
-        <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b border-border bg-card/90 px-4 py-3 backdrop-blur md:px-8">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Payments · Agents</p>
-            <h1 className="text-lg font-bold tracking-tight">Operator console</h1>
+  async function copyPage() {
+    const text = [
+      "Mandate operator console",
+      selected ? `Mandate ${selected.id} ${selected.status} remaining ${formatRupeesFromPaise(selected.remaining_paise)}` : "No mandate",
+      events[0] ? `Last decision ${events[0].decision} ${events[0].reason}` : "No decisions yet",
+    ].join("\n");
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1600);
+  }
+
+  return (
+    <div className="min-h-screen bg-background">
+      <header className="sticky top-0 z-20 border-b border-border bg-background/95 backdrop-blur">
+        <div className="flex h-14 items-center gap-4 px-4 lg:px-6">
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-xs font-extrabold">M</span>
+            <p className="text-sm font-semibold">Mandate Docs</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant={proxyUp ? "ok" : proxyUp === false ? "deny" : "warn"}>
-              {proxyUp ? "Proxy live" : proxyUp === false ? "Proxy down" : "Checking proxy"}
-            </Badge>
+          <label className="relative hidden min-w-0 flex-1 md:block">
+            <span className="sr-only">Search this page</span>
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") jumpFromQuery(search);
+              }}
+              placeholder="Search…"
+              className="h-9 w-full max-w-md rounded-lg border border-border bg-muted px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+            <kbd className="pointer-events-none absolute right-2 top-1.5 hidden rounded border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground lg:inline">
+              Enter
+            </kbd>
+          </label>
+          <nav className="ml-auto hidden items-center gap-5 text-sm text-muted-foreground lg:flex">
+            <span>Payments</span>
+            <span>Banking Plus</span>
+            <span className="border-b-2 border-primary pb-0.5 font-medium text-foreground">Developer Tools</span>
+          </nav>
+          <Badge variant={proxyUp ? "ok" : proxyUp === false ? "deny" : "warn"}>
+            {proxyUp ? "Proxy live" : proxyUp === false ? "Proxy down" : "Checking"}
+          </Badge>
+        </div>
+      </header>
+
+      <div className="mx-auto grid max-w-[1440px] grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[240px_minmax(0,1fr)_220px]">
+        <aside className="border-b border-border px-3 py-4 lg:sticky lg:top-14 lg:h-[calc(100vh-56px)] lg:overflow-y-auto lg:border-b-0 lg:border-r">
+          <p className="px-2 pb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            Developer Tools
+          </p>
+          <button
+            type="button"
+            onClick={() => setTreeOpen((v) => !v)}
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-foreground hover:bg-muted"
+          >
+            <Chevron open={treeOpen} />
+            Mandate
+          </button>
+          {treeOpen ? (
+            <div className="ml-3 mt-1 space-y-0.5 border-l border-border pl-2">
+              {PAGES.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => goTo(item.id)}
+                  className={`block w-full rounded-md px-2 py-1.5 text-left text-sm ${
+                    section === item.id ? "bg-[#152033] text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </aside>
+
+        <main className="relative min-w-0 px-4 py-8 sm:px-8 lg:px-12">
+          <p className="text-sm font-medium text-primary">Mandate</p>
+          <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
+            <h1 className="max-w-3xl text-4xl font-bold tracking-tight sm:text-5xl">Operator console</h1>
+            <Button variant="outline" size="sm" onClick={() => void copyPage()}>
+              {copied ? "Copied" : "Copy page"}
+            </Button>
+          </div>
+          <p className="mt-4 max-w-3xl text-base leading-7 text-muted-foreground">
+            Bounded, revocable authority between any MCP agent and Razorpay money tools. The agent never gets a pay
+            button. Policy is deterministic. Every attempt is hash-chained.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <span className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground">Available in IN India</span>
             <Badge variant={sseOn ? "ok" : "warn"}>{sseOn ? "Live stream" : "Reconnecting"}</Badge>
             <Badge variant={keys ? "ok" : "warn"}>{keys ? "Key on this device" : "No operator key"}</Badge>
           </div>
-        </header>
 
-        <main className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-6 md:px-8 md:py-8">
           {error ? (
-            <p className="rounded-md border border-[#f5c2c0] bg-[#fdecec] px-3 py-2 text-sm text-[#b42318]">{error}</p>
+            <p className="mt-6 rounded-md border border-[#f07167]/40 bg-[#f07167]/10 px-3 py-2 text-sm text-[#f07167]">{error}</p>
           ) : null}
 
-          <section id="snapshot" className="scroll-mt-24">
-            <SectionLabel n="01" title="Snapshot" hint={refreshedAt ? `Updated ${relativeTime(refreshedAt, nowTick)}` : "Waiting for proxy"} />
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <section id="snapshot" className="scroll-mt-24 mt-14">
+            <h2 className="text-2xl font-semibold tracking-tight">Snapshot</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {refreshedAt ? `Updated ${relativeTime(refreshedAt, nowTick)}` : "Waiting for proxy"}
+            </p>
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
               <Stat
                 label="Remaining"
                 value={selected ? formatRupeesFromPaise(selected.remaining_paise) : "—"}
@@ -427,20 +538,20 @@ export default function Page() {
             </div>
           </section>
 
-          <section id="mandate" className="scroll-mt-24">
-            <SectionLabel n="02" title="Mandate" hint="Signed on this device. Proxy holds only the public key." />
-            <Card>
+          <section id="mandate" className="scroll-mt-24 mt-16">
+            <h2 className="text-2xl font-semibold tracking-tight">Issue a mandate</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+              Signed on this device. The proxy holds only the public key. Remaining budget is settled plus live
+              reservations against the cumulative cap.
+            </p>
+            <Card className="mt-6">
               <CardHeader>
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <CardTitle>Active authority</CardTitle>
-                    <CardDescription>
-                      Remaining budget is settled plus live reservations against the cumulative cap.
-                    </CardDescription>
+                    <CardDescription>Demo cap is ₹500 total / ₹100 per txn.</CardDescription>
                   </div>
-                  {selected ? (
-                    <Badge variant={selected.status === "ACTIVE" ? "ok" : "deny"}>{selected.status}</Badge>
-                  ) : null}
+                  {selected ? <Badge variant={selected.status === "ACTIVE" ? "ok" : "deny"}>{selected.status}</Badge> : null}
                 </div>
               </CardHeader>
               <CardContent className="space-y-5">
@@ -462,17 +573,12 @@ export default function Page() {
                         <span>Available {remainingPct}%</span>
                       </div>
                       <div className="h-2 overflow-hidden rounded-full bg-muted">
-                        <div
-                          className="budget-fill h-full rounded-full bg-primary"
-                          style={{ width: `${remainingPct}%` }}
-                        />
+                        <div className="budget-fill h-full rounded-full bg-primary" style={{ width: `${remainingPct}%` }} />
                       </div>
                     </div>
                   </>
                 ) : (
-                  <p className="text-sm text-muted-foreground">
-                    No mandate yet. Issue a demo cap of ₹500 total / ₹100 per txn to start.
-                  </p>
+                  <p className="text-sm text-muted-foreground">No mandate yet. Issue one to start the demo.</p>
                 )}
                 <div className="flex flex-wrap gap-2">
                   <Button onClick={() => void issueDemo()} disabled={busy !== null}>
@@ -486,16 +592,13 @@ export default function Page() {
             </Card>
           </section>
 
-          <section id="spend" className="scroll-mt-24">
-            <SectionLabel n="03" title="Propose spend" hint="Goes through evaluate(). There is no pay tool on the agent." />
-            <Card>
-              <CardHeader>
-                <CardTitle>New proposal</CardTitle>
-                <CardDescription>
-                  Amount is integer paise. Shown live as rupees. Unknown tools fail closed.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
+          <section id="spend" className="scroll-mt-24 mt-16">
+            <h2 className="text-2xl font-semibold tracking-tight">Propose spend</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+              Goes through evaluate(). Amount is integer paise, shown live as rupees. Unknown tools fail closed.
+            </p>
+            <Card className="mt-6">
+              <CardContent className="space-y-4 pt-5">
                 <div className="space-y-2">
                   <Label>MCP tool</Label>
                   <div className="flex flex-wrap gap-2">
@@ -506,8 +609,8 @@ export default function Page() {
                         onClick={() => setTool(t.id)}
                         className={`rounded-md border px-3 py-1.5 text-sm transition-colors ${
                           tool === t.id
-                            ? "border-primary bg-[#e8f4ff] text-secondary"
-                            : "border-border bg-card text-muted-foreground hover:border-primary/40"
+                            ? "border-primary bg-[#0d94fb]/15 text-foreground"
+                            : "border-border text-muted-foreground hover:border-primary/50"
                         }`}
                       >
                         {t.label}
@@ -515,57 +618,46 @@ export default function Page() {
                     ))}
                   </div>
                   {tool === "create_payout" ? (
-                    <p className="text-xs text-[#9a6700]">create_payout is unclassified on this test account → TOOL_UNCLASSIFIED.</p>
+                    <p className="text-xs text-notice">create_payout is unclassified on this test account → TOOL_UNCLASSIFIED.</p>
                   ) : null}
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <Label htmlFor="amt">Amount (paise)</Label>
-                    <span className="font-mono text-sm font-semibold text-secondary">
+                    <span className="font-mono text-sm font-semibold">
                       {parsedAmount === null ? "—" : formatRupeesFromPaise(parsedAmount)}
                     </span>
                   </div>
-                  <Input
-                    id="amt"
-                    inputMode="numeric"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    aria-describedby="amt-help"
-                  />
+                  <Input id="amt" inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} />
                   <div className="flex flex-wrap gap-2">
                     {AMOUNT_CHIPS.map((chip) => (
                       <button
                         key={chip.paise}
                         type="button"
                         onClick={() => setAmount(String(chip.paise))}
-                        className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground hover:border-primary hover:text-secondary"
+                        className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground hover:border-primary hover:text-foreground"
                       >
                         {chip.hint}
                       </button>
                     ))}
                   </div>
-                  <p id="amt-help" className="text-xs text-muted-foreground">
-                    100 paise = ₹1. Try ₹200 to trip the per-txn cap.
-                  </p>
                 </div>
-                <Button className="w-full sm:w-auto" onClick={() => void propose()} disabled={busy !== null}>
+                <Button onClick={() => void propose()} disabled={busy !== null}>
                   {busy === "propose" ? "Evaluating…" : "Propose spend"}
                 </Button>
               </CardContent>
             </Card>
           </section>
 
-          <section id="activity" className="scroll-mt-24">
-            <SectionLabel n="04" title="Live activity" hint="SSE from the proxy, plus decisions from this browser." />
-            <Card>
+          <section id="activity" className="scroll-mt-24 mt-16">
+            <h2 className="text-2xl font-semibold tracking-tight">Live activity</h2>
+            <p className="mt-2 text-sm text-muted-foreground">SSE from the proxy, plus decisions from this browser.</p>
+            <Card className="mt-6">
               <CardHeader>
                 <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <CardTitle>Decisions</CardTitle>
-                    <CardDescription>Newest first. Each row is one evaluate() result.</CardDescription>
-                  </div>
+                  <CardTitle>Decisions</CardTitle>
                   <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <span className={`h-2 w-2 rounded-full ${sseOn ? "live-dot bg-success" : "bg-[#c17b00]"}`} />
+                    <span className={`h-2 w-2 rounded-full ${sseOn ? "live-dot bg-success" : "bg-notice"}`} />
                     {sseOn ? "Receiving" : "Idle"}
                   </span>
                 </div>
@@ -591,20 +683,115 @@ export default function Page() {
               </CardContent>
             </Card>
           </section>
+
+          <section id="how-it-works" className="scroll-mt-24 mt-16 space-y-3">
+            <h2 className="text-2xl font-semibold tracking-tight">How evaluate() works</h2>
+            <AccordionRow title="Benefits" open={benefitsOpen} onToggle={() => setBenefitsOpen((v) => !v)}>
+              <ul className="list-disc space-y-1 pl-4 text-sm text-muted-foreground">
+                <li>Fail closed on unknown tools, events, and reason codes.</li>
+                <li>Ed25519 signature verified on every decision. No cached validity.</li>
+                <li>Reserve-then-settle so parallel spends cannot blow the cumulative cap.</li>
+              </ul>
+            </AccordionRow>
+            <AccordionRow title="MCP session" open={mcpOpen} onToggle={() => setMcpOpen((v) => !v)}>
+              <p className="text-sm leading-6 text-muted-foreground">
+                Cursor / Claude Desktop: run <code className="text-foreground">pnpm dev:mcp</code> with{" "}
+                <code className="text-foreground">MANDATE_AGENT_ID=agent_demo</code>. Missing agent id is NO_MANDATE.
+              </p>
+            </AccordionRow>
+          </section>
+
+          <nav className="mt-16 flex items-stretch justify-between gap-4 border-t border-border pt-8" aria-label="Section pagination">
+            {prevPage ? (
+              <button
+                type="button"
+                onClick={() => goTo(prevPage.id)}
+                className="min-w-0 flex-1 rounded-xl border border-border px-4 py-4 text-left hover:border-primary/60"
+              >
+                <p className="text-xs text-muted-foreground">Previous</p>
+                <p className="mt-1 truncate font-medium">{prevPage.label}</p>
+              </button>
+            ) : (
+              <span className="flex-1" />
+            )}
+            {nextPage ? (
+              <button
+                type="button"
+                onClick={() => goTo(nextPage.id)}
+                className="min-w-0 flex-1 rounded-xl border border-border px-4 py-4 text-right hover:border-primary/60"
+              >
+                <p className="text-xs text-muted-foreground">Next</p>
+                <p className="mt-1 truncate font-medium">{nextPage.label}</p>
+              </button>
+            ) : null}
+          </nav>
+
+          <form
+            className="sticky bottom-4 mt-10 flex items-center gap-2 rounded-full border border-border bg-card/90 p-1.5 shadow-lg shadow-black/40 backdrop-blur"
+            onSubmit={(e) => {
+              e.preventDefault();
+              jumpFromQuery(ask);
+            }}
+          >
+            <input
+              value={ask}
+              onChange={(e) => setAsk(e.target.value)}
+              placeholder="Ask a question…"
+              className="h-10 flex-1 bg-transparent px-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+            />
+            <button
+              type="submit"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground"
+              aria-label="Go to matching section"
+            >
+              ↑
+            </button>
+          </form>
         </main>
+
+        <aside className="hidden xl:block xl:sticky xl:top-14 xl:h-[calc(100vh-56px)] xl:overflow-y-auto xl:border-l xl:border-border xl:px-5 xl:py-8">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">On this page</p>
+          <nav className="mt-3 space-y-1">
+            {(search ? filteredToc : TOC).map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => goTo(item.id)}
+                className={`block w-full rounded-md px-2 py-1.5 text-left text-sm ${
+                  section === item.id ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+            {search && filteredToc.length === 0 ? (
+              <p className="px-2 text-xs text-muted-foreground">No matching headings.</p>
+            ) : null}
+          </nav>
+        </aside>
       </div>
     </div>
   );
 }
 
-function SectionLabel({ n, title, hint }: { n: string; title: string; hint: string }) {
+function AccordionRow({
+  title,
+  open,
+  onToggle,
+  children,
+}: {
+  title: string;
+  open: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
   return (
-    <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
-      <h2 className="text-sm font-bold tracking-tight text-secondary">
-        <span className="mr-2 font-mono text-xs font-medium text-primary">{n}</span>
-        {title}
-      </h2>
-      <p className="text-xs text-muted-foreground">{hint}</p>
+    <div className="rounded-xl border border-border">
+      <button type="button" onClick={onToggle} className="flex w-full items-center gap-3 px-4 py-3 text-left">
+        <Chevron open={open} />
+        <span className="text-sm font-medium">{title}</span>
+      </button>
+      {open ? <div className="px-4 pb-4">{children}</div> : null}
     </div>
   );
 }
@@ -614,7 +801,7 @@ function Stat({ label, value, sub }: { label: string; value: string; sub: string
     <Card>
       <CardContent className="p-4">
         <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">{label}</p>
-        <p className="mt-2 font-mono text-xl font-semibold tracking-tight text-secondary">{value}</p>
+        <p className="mt-2 font-mono text-xl font-semibold tracking-tight">{value}</p>
         <p className="mt-1 text-xs text-muted-foreground">{sub}</p>
       </CardContent>
     </Card>

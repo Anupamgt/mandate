@@ -6,10 +6,10 @@ export function Badge({
   ...props
 }: React.ComponentProps<"span"> & { variant?: "default" | "ok" | "deny" | "warn" }) {
   const styles = {
-    default: "bg-[#e8f4ff] text-[#0b6fbe]",
-    ok: "bg-[#e5f8ef] text-[#027a48]",
-    deny: "bg-[#fdecec] text-[#b42318]",
-    warn: "bg-[#fff6e5] text-[#9a6700]",
+    default: "bg-[#0d94fb]/15 text-[#7ec8ff]",
+    ok: "bg-[#3dd68c]/15 text-[#3dd68c]",
+    deny: "bg-[#f07167]/15 text-[#f07167]",
+    warn: "bg-[#f5c16c]/15 text-[#f5c16c]",
   } as const;
   return (
     <span
