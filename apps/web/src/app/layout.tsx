@@ -23,7 +23,12 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} ${ibm.variable} antialiased`}>{children}</body>
+      <body className={`${inter.variable} ${ibm.variable} antialiased`}>
+        <a href="/approvals" className="fixed bottom-20 right-4 z-40 text-xs text-muted-foreground hover:text-primary">
+          Step-up inbox
+        </a>
+        {children}
+      </body>
     </html>
   );
 }

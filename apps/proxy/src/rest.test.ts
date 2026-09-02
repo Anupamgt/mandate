@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { signMandateBody, signRevocation, parseMandateBody } from "@mandate/mandate";
+import { signMandateBody, signRevocation, signApproval, parseMandateBody } from "@mandate/mandate";
 import { makeTestProxy } from "./harness.js";
 
 const body = {
@@ -187,5 +187,181 @@ describe("REST gate", () => {
     expect(first.reason_code).toBe("ALLOW");
     expect(second.reason_code).toBe("ALLOW");
     expect(third.reason_code).toBe("RATE_LIMITED");
+  });
+
+  it("FR-73/SEC-05 unsigned or bad step-up signature is rejected", async () => {
+    const { app, keys } = await makeTestProxy();
+    const parsed = parseMandateBody(body);
+    const signature = await signMandateBody(parsed, keys.privateKeyHex);
+    await app.request("/mandates", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ body: parsed, signature }),
+    });
+
+    const step = await app.request("/spend/propose", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        agent_id: "agent_demo",
+        tool: "create_order",
+        counterparty_id: "prov_compute_a",
+        amount_paise: 8001,
+        purpose: "needs step-up",
+      }),
+    });
+    const stepped = (await step.json()) as { spend_request_id: string; decision: string; reason_code: string };
+    expect(stepped.decision).toBe("STEP_UP");
+    expect(stepped.reason_code).toBe("STEP_UP_THRESHOLD");
+
+    const inbox = await app.request("/spend/pending-approvals");
+    const listed = (await inbox.json()) as { pending: { spend_request_id: string }[] };
+    expect(listed.pending.map((p) => p.spend_request_id)).toContain(stepped.spend_request_id);
+
+    const unsigned = await app.request(`/spend/${stepped.spend_request_id}/approve`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        spend_request_id: stepped.spend_request_id,
+        approved_at: "2026-09-02T12:00:00.000Z",
+      }),
+    });
+    expect(unsigned.status).toBe(400);
+
+    const bad = await app.request(`/spend/${stepped.spend_request_id}/approve`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        spend_request_id: stepped.spend_request_id,
+        approved_at: "2026-09-02T12:00:00.000Z",
+        signature: "00".repeat(64),
+      }),
+    });
+    expect(bad.status).toBe(400);
+
+    const toggle = await app.request(`/spend/${stepped.spend_request_id}/approve`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ approved: true }),
+    });
+    expect(toggle.status).toBe(400);
+
+    const mismatch = await app.request(`/spend/${stepped.spend_request_id}/approve`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        spend_request_id: "other-spend",
+        approved_at: "2026-09-02T12:00:00.000Z",
+        signature: "00".repeat(64),
+      }),
+    });
+    expect(mismatch.status).toBe(400);
+
+    const stillPending = (await (await app.request("/spend/pending-approvals")).json()) as {
+      pending: { spend_request_id: string }[];
+    };
+    expect(stillPending.pending.map((p) => p.spend_request_id)).toContain(stepped.spend_request_id);
+
+    const approvedAt = "2026-09-02T12:00:00.000Z";
+    const okSig = await signApproval(
+      { spend_request_id: stepped.spend_request_id, approved_at: approvedAt },
+      keys.privateKeyHex,
+    );
+    const granted = await app.request(`/spend/${stepped.spend_request_id}/approve`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        spend_request_id: stepped.spend_request_id,
+        approved_at: approvedAt,
+        signature: okSig,
+      }),
+    });
+    expect(granted.status).toBe(200);
+    const grantedJson = (await granted.json()) as {
+      decision: string;
+      reason_code: string;
+      proof: { mac: string } | null;
+    };
+    expect(grantedJson.decision).toBe("ALLOW");
+    expect(grantedJson.reason_code).toBe("ALLOW");
+    expect(grantedJson.proof?.mac.length).toBeGreaterThan(8);
+
+    const after = (await (await app.request("/spend/pending-approvals")).json()) as {
+      pending: { spend_request_id: string }[];
+    };
+    expect(after.pending.map((p) => p.spend_request_id)).not.toContain(stepped.spend_request_id);
+
+    const replay = await app.request(`/spend/${stepped.spend_request_id}/approve`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        spend_request_id: stepped.spend_request_id,
+        approved_at: approvedAt,
+        signature: okSig,
+      }),
+    });
+    expect(replay.status).toBe(409);
+  });
+
+  it("FR-73 re-checks mandate: revoke then approve refuses and does not pay", async () => {
+    const { app, keys, deps } = await makeTestProxy();
+    const parsed = parseMandateBody(body);
+    const signature = await signMandateBody(parsed, keys.privateKeyHex);
+    const issued = await app.request("/mandates", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ body: parsed, signature }),
+    });
+    const { id } = (await issued.json()) as { id: string };
+
+    const step = await app.request("/spend/propose", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        agent_id: "agent_demo",
+        tool: "create_order",
+        counterparty_id: "prov_compute_a",
+        amount_paise: 8001,
+        purpose: "needs step-up",
+      }),
+    });
+    const stepped = (await step.json()) as { spend_request_id: string };
+
+    const revokedAt = "2026-09-02T12:00:00.000Z";
+    const revSig = await signRevocation(
+      { mandate_id: id, reason: "stop", revoked_at: revokedAt },
+      keys.privateKeyHex,
+    );
+    expect(
+      (
+        await app.request(`/mandates/${id}/revoke`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ reason: "stop", signature: revSig, revoked_at: revokedAt }),
+        })
+      ).status,
+    ).toBe(200);
+
+    const approvedAt = "2026-09-02T12:00:00.000Z";
+    const okSig = await signApproval(
+      { spend_request_id: stepped.spend_request_id, approved_at: approvedAt },
+      keys.privateKeyHex,
+    );
+    const granted = await app.request(`/spend/${stepped.spend_request_id}/approve`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        spend_request_id: stepped.spend_request_id,
+        approved_at: approvedAt,
+        signature: okSig,
+      }),
+    });
+    expect(granted.status).toBe(200);
+    const json = (await granted.json()) as { decision: string; reason_code: string; proof: unknown };
+    expect(json.decision).toBe("DENY");
+    expect(json.reason_code).toBe("MANDATE_REVOKED");
+    expect(json.proof).toBeNull();
+    expect(await deps.prisma.settlement.count({ where: { spendRequestId: stepped.spend_request_id } })).toBe(0);
+    expect(await deps.prisma.approval.count({ where: { spendRequestId: stepped.spend_request_id } })).toBe(0);
   });
 });

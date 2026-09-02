@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { asPaise } from "@mandate/shared";
-import { generateOperatorKeyPair, parseMandateBody, signMandateBody, verifyMandateBody } from "./index.js";
+import { generateOperatorKeyPair, parseMandateBody, signApproval, signMandateBody, verifyApproval, verifyMandateBody } from "./index.js";
 
 describe("FR-01/FR-02 mandate sign/verify", () => {
   it("round-trips a valid body", async () => {
@@ -38,6 +38,16 @@ describe("FR-01/FR-02 mandate sign/verify", () => {
     const sig = await signMandateBody(body, keys.privateKeyHex);
     const tampered = { ...body, max_per_txn_paise: asPaise(999) };
     expect(await verifyMandateBody(tampered, sig, keys.publicKeyHex)).toBe(false);
+  });
+
+  it("SEC-05 approval record is Ed25519-signed over spend_request_id", async () => {
+    const keys = await generateOperatorKeyPair();
+    const approval = { spend_request_id: "sp_1", approved_at: "2026-09-02T12:00:00.000Z" };
+    const sig = await signApproval(approval, keys.privateKeyHex);
+    expect(await verifyApproval(approval, sig, keys.publicKeyHex)).toBe(true);
+    expect(
+      await verifyApproval({ ...approval, spend_request_id: "sp_2" }, sig, keys.publicKeyHex),
+    ).toBe(false);
   });
 
   it("rejects non-integer paise", () => {
