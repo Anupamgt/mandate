@@ -32,6 +32,7 @@ const PAGES = [
   { id: "snapshot", label: "Snapshot" },
   { id: "mandate", label: "Issue a mandate" },
   { id: "spend", label: "Propose spend" },
+  { id: "approvals", label: "Approvals inbox" },
   { id: "activity", label: "Live activity" },
   { id: "how-it-works", label: "How evaluate() works" },
 ] as const;
@@ -40,6 +41,7 @@ const TOC = [
   { id: "snapshot", label: "Snapshot" },
   { id: "mandate", label: "Issue a mandate" },
   { id: "spend", label: "Propose spend" },
+  { id: "approvals", label: "Approvals inbox" },
   { id: "activity", label: "Live activity" },
   { id: "how-it-works", label: "How evaluate() works" },
 ] as const;
@@ -74,6 +76,18 @@ type Decision = {
   checks?: string[];
   proof?: { invoice_id: string; mac: string; resource: string; expires_at: string };
   error?: string;
+};
+
+type PendingApproval = {
+  spend_request_id: string;
+  mandate_id: string;
+  agent_id: string;
+  tool: string;
+  amount_paise: number;
+  purpose: string;
+  status: string;
+  reason_code?: string;
+  decided_at?: string | null;
 };
 
 type LiveEvent = {
@@ -114,6 +128,7 @@ function Chevron({ open }: { open: boolean }) {
 export default function Page() {
   const [keys, setKeys] = useState<{ pub: string; priv: string } | null>(null);
   const [mandates, setMandates] = useState<Mandate[]>([]);
+  const [pending, setPending] = useState<PendingApproval[]>([]);
   const [events, setEvents] = useState<LiveEvent[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -146,11 +161,19 @@ export default function Page() {
 
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch(`${PROXY}/mandates`);
-      if (!res.ok) return;
-      const json = (await res.json()) as { mandates: Mandate[] };
-      setMandates(json.mandates);
-      setRefreshedAt(Date.now());
+      const [mandateRes, pendingRes] = await Promise.all([
+        fetch(`${PROXY}/mandates`),
+        fetch(`${PROXY}/spend/pending-approvals`),
+      ]);
+      if (mandateRes.ok) {
+        const json = (await mandateRes.json()) as { mandates: Mandate[] };
+        setMandates(json.mandates);
+      }
+      if (pendingRes.ok) {
+        const json = (await pendingRes.json()) as { pending: PendingApproval[] };
+        setPending(json.pending);
+      }
+      if (mandateRes.ok || pendingRes.ok) setRefreshedAt(Date.now());
     } finally {
       setLoading(false);
     }
@@ -362,6 +385,34 @@ export default function Page() {
           ...prev,
         ].slice(0, 16);
       });
+      await refresh();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function approvePending(item: PendingApproval) {
+    setError(null);
+    setBusy(`approve:${item.spend_request_id}`);
+    try {
+      const k = await ensureKeys();
+      const payload = {
+        spend_request_id: item.spend_request_id,
+        approved_at: new Date().toISOString(),
+      };
+      const signature = await signBody(payload, k.priv);
+      const res = await fetch(`${PROXY}/spend/${item.spend_request_id}/approve`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ...payload, signature }),
+      });
+      const json = (await res.json()) as { decision?: string; reason_code?: string; error?: string };
+      if (!res.ok) throw new Error(json.error ?? "approval failed");
+      if (json.decision === "DENY") {
+        throw new Error(json.reason_code ?? "DENY");
+      }
       await refresh();
     } catch (e) {
       setError(String(e));
@@ -628,6 +679,57 @@ export default function Page() {
                 <Button onClick={() => void propose()} disabled={busy !== null}>
                   {busy === "propose" ? "Evaluating…" : "Propose spend"}
                 </Button>
+              </CardContent>
+            </Card>
+          </section>
+
+          <section id="approvals" className="scroll-mt-24 mt-16">
+            <h2 className="text-2xl font-semibold tracking-tight">Approvals inbox</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+              STEP_UP spends wait here. Approve signs <code className="text-foreground">spend_request_id</code> and{" "}
+              <code className="text-foreground">approved_at</code> on this device. The proxy verifies before proceeding.
+            </p>
+            <Card className="mt-6">
+              <CardHeader>
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <CardTitle>Pending step-up</CardTitle>
+                    <CardDescription>Operator-signed records only. The LLM never signs.</CardDescription>
+                  </div>
+                  <Badge variant={pending.length > 0 ? "warn" : "ok"}>
+                    {pending.length === 0 ? "Clear" : `${pending.length} waiting`}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {pending.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No STEP_UP requests. Propose above the step-up threshold to queue one.
+                  </p>
+                ) : (
+                  <ul className="divide-y divide-border">
+                    {pending.map((item) => (
+                      <li key={item.spend_request_id} className="flex flex-wrap items-start justify-between gap-3 py-3">
+                        <div>
+                          <p className="font-mono text-sm font-medium">{item.reason_code ?? "STEP_UP_THRESHOLD"}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatRupeesFromPaise(item.amount_paise)} · {item.tool} · {item.purpose}
+                          </p>
+                          <p className="mt-1 font-mono text-[11px] text-muted-foreground">
+                            {item.spend_request_id.slice(0, 8)}…
+                          </p>
+                        </div>
+                        <Button
+                          size="sm"
+                          onClick={() => void approvePending(item)}
+                          disabled={busy !== null}
+                        >
+                          {busy === `approve:${item.spend_request_id}` ? "Signing…" : "Approve"}
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </CardContent>
             </Card>
           </section>

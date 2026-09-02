@@ -360,32 +360,62 @@ async function proposeSpendInner(deps: ProxyDeps, input: ProposeInput) {
     return { spend_request_id: spendId, ...decision };
   }
 
+  return reserveThenPay(deps, {
+    spendId,
+    mandateRow,
+    amountPaise: input.amountPaise,
+    counterpartyId,
+    invoiceId,
+    resource: input.resource ?? "compute/run",
+    checks: decision.checks,
+    failProvision: Boolean(input.failProvision),
+  });
+}
+
+async function reserveThenPay(
+  deps: ProxyDeps,
+  args: {
+    spendId: string;
+    mandateRow: { id: string; bodyJson: string };
+    amountPaise: number;
+    counterpartyId: string;
+    invoiceId: string;
+    resource: string;
+    checks: readonly string[];
+    failProvision?: boolean;
+  },
+) {
+  const now = deps.now();
   const expiresAt = new Date(now.getTime() + 60_000);
   try {
     await deps.prisma.$transaction(async (tx) => {
       const settled = await tx.settlement.aggregate({
         _sum: { amountPaise: true },
-        where: { spendRequest: { mandateId: mandateRow.id }, reversal: null },
+        where: { spendRequest: { mandateId: args.mandateRow.id }, reversal: null },
       });
       const reserved = await tx.reservation.aggregate({
         _sum: { amountPaise: true },
-        where: { mandateId: mandateRow.id, releasedAt: null, expiresAt: { gt: now } },
+        where: { mandateId: args.mandateRow.id, releasedAt: null, expiresAt: { gt: now } },
       });
       const live = (settled._sum.amountPaise ?? 0) + (reserved._sum.amountPaise ?? 0);
-      const body = parseMandateBody(JSON.parse(mandateRow.bodyJson));
-      if (live + input.amountPaise > body.max_total_paise) {
+      const body = parseMandateBody(JSON.parse(args.mandateRow.bodyJson));
+      if (live + args.amountPaise > body.max_total_paise) {
         throw new Error("CUM_CAP_EXCEEDED");
       }
-      const fresh = await tx.mandate.findUniqueOrThrow({ where: { id: mandateRow.id } });
+      const fresh = await tx.mandate.findUniqueOrThrow({ where: { id: args.mandateRow.id } });
       if (fresh.status !== "ACTIVE") {
         throw new Error("MANDATE_REVOKED");
+      }
+      const sigOk = await verifyMandateBody(body, fresh.signature, deps.operatorPublicKeyHex);
+      if (!sigOk) {
+        throw new Error("MANDATE_SIG_INVALID");
       }
       await tx.reservation.create({
         data: {
           id: randomUUID(),
-          spendRequestId: spendId,
-          mandateId: mandateRow.id,
-          amountPaise: input.amountPaise,
+          spendRequestId: args.spendId,
+          mandateId: args.mandateRow.id,
+          amountPaise: args.amountPaise,
           expiresAt,
         },
       });
@@ -396,82 +426,91 @@ async function proposeSpendInner(deps: ProxyDeps, input: ProposeInput) {
       ? "MANDATE_REVOKED"
       : msg.includes("CUM_CAP_EXCEEDED")
         ? "CUM_CAP_EXCEEDED"
-        : undefined;
+        : msg.includes("MANDATE_SIG_INVALID")
+          ? "MANDATE_SIG_INVALID"
+          : undefined;
     if (code) {
-      await deps.prisma.spendRequest.update({ where: { id: spendId }, data: { status: "DENY" } });
+      await deps.prisma.spendRequest.update({ where: { id: args.spendId }, data: { status: "DENY" } });
       await deps.prisma.decision.update({
-        where: { spendRequestId: spendId },
+        where: { spendRequestId: args.spendId },
         data: { decision: "DENY", reasonCode: code, checksJson: JSON.stringify(["reserve:fail"]) },
       });
-      return { spend_request_id: spendId, decision: "DENY" as const, reason_code: code, checks: ["reserve:fail"] };
+      return {
+        spend_request_id: args.spendId,
+        decision: "DENY" as const,
+        reason_code: code,
+        checks: ["reserve:fail"],
+        proof: null,
+      };
     }
     throw err;
   }
 
   await appendAudit(deps.prisma, {
-    mandateId: mandateRow.id,
-    spendRequestId: spendId,
+    mandateId: args.mandateRow.id,
+    spendRequestId: args.spendId,
     eventType: "RESERVED",
     actor: "proxy",
-    payload: { amountPaise: input.amountPaise },
+    payload: { amountPaise: args.amountPaise },
     ts: deps.now(),
   });
 
-  const quote = await deps.rail.quote(asPaise(input.amountPaise), counterpartyId);
-  const settlement = await deps.rail.pay(quote, mandateRow.id, invoiceId);
+  const quote = await deps.rail.quote(asPaise(args.amountPaise), args.counterpartyId);
+  const settlement = await deps.rail.pay(quote, args.mandateRow.id, args.invoiceId);
   await deps.prisma.settlement.create({
     data: {
       id: randomUUID(),
-      spendRequestId: spendId,
+      spendRequestId: args.spendId,
       railId: settlement.railId,
       externalRef: settlement.externalRef,
       amountPaise: settlement.amountPaise,
-      idempotencyKey: invoiceId,
+      idempotencyKey: args.invoiceId,
       settledAt: deps.now(),
     },
   });
   await deps.prisma.reservation.update({
-    where: { spendRequestId: spendId },
+    where: { spendRequestId: args.spendId },
     data: { releasedAt: deps.now() },
   });
   await appendAudit(deps.prisma, {
-    mandateId: mandateRow.id,
-    spendRequestId: spendId,
+    mandateId: args.mandateRow.id,
+    spendRequestId: args.spendId,
     eventType: "SETTLED",
     actor: "rail",
     payload: settlement,
     ts: deps.now(),
   });
 
-  const resource = input.resource ?? "compute/run";
+  const resource = args.resource;
   const exp = new Date(deps.now().getTime() + 120_000).toISOString();
-  const mac = signProof(deps.proofSecret, invoiceId, resource, exp);
+  const mac = signProof(deps.proofSecret, args.invoiceId, resource, exp);
   await deps.prisma.invoice.create({
     data: {
-      id: invoiceId,
-      spendRequestId: spendId,
-      providerId: await ensureProvider(deps, counterpartyId),
+      id: args.invoiceId,
+      spendRequestId: args.spendId,
+      providerId: await ensureProvider(deps, args.counterpartyId),
       resource,
-      amountPaise: input.amountPaise,
+      amountPaise: args.amountPaise,
       expiresAt: new Date(exp),
     },
   });
 
-  const provisioned = input.failProvision
+  const provisioned = args.failProvision
     ? false
     : deps.waitForProvision
       ? await Promise.race([
-          deps.waitForProvision(invoiceId),
+          deps.waitForProvision(args.invoiceId),
           sleep(deps.provisionTimeoutMs).then(() => false),
         ])
-      : !input.failProvision;
+      : !args.failProvision;
 
   if (!provisioned) {
     const rev = await deps.rail.reverse(settlement, "provision_timeout");
     await deps.prisma.reversal.create({
       data: {
         id: randomUUID(),
-        settlementId: (await deps.prisma.settlement.findUniqueOrThrow({ where: { spendRequestId: spendId } })).id,
+        settlementId: (await deps.prisma.settlement.findUniqueOrThrow({ where: { spendRequestId: args.spendId } }))
+          .id,
         externalRef: rev.externalRef,
         amountPaise: rev.amountPaise,
         reason: "provision_timeout",
@@ -480,39 +519,39 @@ async function proposeSpendInner(deps: ProxyDeps, input: ProposeInput) {
       },
     });
     await appendAudit(deps.prisma, {
-      mandateId: mandateRow.id,
-      spendRequestId: spendId,
+      mandateId: args.mandateRow.id,
+      spendRequestId: args.spendId,
       eventType: rev.succeeded ? "EXCEPTION" : "EXCEPTION_UNRESOLVED",
       actor: "reconciler",
       payload: { reverse: rev },
       ts: deps.now(),
     });
-    await deps.prisma.spendRequest.update({ where: { id: spendId }, data: { status: "EXCEPTION" } });
+    await deps.prisma.spendRequest.update({ where: { id: args.spendId }, data: { status: "EXCEPTION" } });
     return {
-      spend_request_id: spendId,
+      spend_request_id: args.spendId,
       decision: "ALLOW" as const,
       reason_code: "ALLOW" as const,
-      checks: decision.checks,
+      checks: args.checks,
       exception: rev.succeeded ? "EXCEPTION" : "EXCEPTION_UNRESOLVED",
-      proof: { invoice_id: invoiceId, resource, expires_at: exp, mac },
+      proof: { invoice_id: args.invoiceId, resource, expires_at: exp, mac },
     };
   }
 
   await appendAudit(deps.prisma, {
-    mandateId: mandateRow.id,
-    spendRequestId: spendId,
+    mandateId: args.mandateRow.id,
+    spendRequestId: args.spendId,
     eventType: "PROVISIONED",
     actor: "resource-server",
-    payload: { invoiceId },
+    payload: { invoiceId: args.invoiceId },
     ts: deps.now(),
   });
-  await deps.prisma.spendRequest.update({ where: { id: spendId }, data: { status: "SETTLED" } });
+  await deps.prisma.spendRequest.update({ where: { id: args.spendId }, data: { status: "SETTLED" } });
   return {
-    spend_request_id: spendId,
+    spend_request_id: args.spendId,
     decision: "ALLOW" as const,
     reason_code: "ALLOW" as const,
-    checks: decision.checks,
-    proof: { invoice_id: invoiceId, resource, expires_at: exp, mac },
+    checks: args.checks,
+    proof: { invoice_id: args.invoiceId, resource, expires_at: exp, mac },
   };
 }
 
@@ -610,22 +649,115 @@ export async function verifyAudit(deps: ProxyDeps) {
   );
 }
 
-export async function approveStepUp(deps: ProxyDeps, spendId: string, signature: string) {
-  const now = deps.now();
-  const payload = { spend_request_id: spendId, approved_at: now.toISOString() };
+export async function listPendingApprovals(deps: ProxyDeps) {
+  const rows = await deps.prisma.spendRequest.findMany({
+    where: { status: "STEP_UP", approval: { is: null }, settlement: { is: null } },
+    include: { decision: true },
+    orderBy: { id: "asc" },
+  });
+  return {
+    pending: rows.map((row) => ({
+      spend_request_id: row.id,
+      mandate_id: row.mandateId,
+      agent_id: row.agentId,
+      tool: row.tool,
+      counterparty_id: row.counterpartyId,
+      amount_paise: row.amountPaise,
+      purpose: row.purpose,
+      status: row.status,
+      reason_code: row.decision?.reasonCode ?? "STEP_UP_THRESHOLD",
+      decided_at: row.decision?.decidedAt.toISOString() ?? null,
+    })),
+  };
+}
+
+export async function approveStepUp(
+  deps: ProxyDeps,
+  spendId: string,
+  signature: string | undefined,
+  approvedAt: string | undefined,
+  claimedSpendId?: string,
+) {
+  if (!signature || !approvedAt) {
+    throw Object.assign(new Error("bad approval"), { status: 400 });
+  }
+  if (claimedSpendId && claimedSpendId !== spendId) {
+    throw Object.assign(new Error("spend_request_id mismatch"), { status: 400 });
+  }
+  const approvedAtDate = new Date(approvedAt);
+  if (Number.isNaN(approvedAtDate.getTime())) {
+    throw Object.assign(new Error("bad approval"), { status: 400 });
+  }
+  const payload = { spend_request_id: spendId, approved_at: approvedAt };
   const ok = await verifyApproval(payload, signature, deps.operatorPublicKeyHex);
   if (!ok) throw Object.assign(new Error("bad approval"), { status: 400 });
+
+  const spend = await deps.prisma.spendRequest.findUnique({
+    where: { id: spendId },
+    include: { approval: true, settlement: true, mandate: true, decision: true },
+  });
+  if (!spend) throw Object.assign(new Error("not found"), { status: 404 });
+  if (spend.approval || spend.settlement) {
+    throw Object.assign(new Error("already approved"), { status: 409 });
+  }
+  if (spend.status !== "STEP_UP") {
+    throw Object.assign(new Error("not awaiting approval"), { status: 400 });
+  }
+
+  const now = deps.now();
+  const mandateView = {
+    body: parseMandateBody(JSON.parse(spend.mandate.bodyJson)),
+    signature: spend.mandate.signature,
+    status: spend.mandate.status,
+    publicKeyHex: deps.operatorPublicKeyHex,
+  };
+  const led = await ledgerFor(deps.prisma, spend.mandateId, now);
+  const decision = await evaluate(
+    {
+      agentId: spend.agentId,
+      tool: spend.tool,
+      toolClass: classifyTool(spend.tool, deps.tools),
+      counterpartyId: spend.counterpartyId,
+      amountPaise: asPaise(spend.amountPaise),
+    },
+    mandateView,
+    { settledPaise: led.settledPaise, reservedPaise: led.reservedPaise },
+    now,
+  );
+
+  if (decision.decision === "DENY") {
+    return {
+      spend_request_id: spendId,
+      decision: decision.decision,
+      reason_code: decision.reason_code,
+      checks: decision.checks,
+      proof: null,
+    };
+  }
+
   await deps.prisma.approval.create({
-    data: { id: randomUUID(), spendRequestId: spendId, signature, approvedAt: now },
+    data: { id: randomUUID(), spendRequestId: spendId, signature, approvedAt: approvedAtDate },
   });
   await appendAudit(deps.prisma, {
+    mandateId: spend.mandateId,
     spendRequestId: spendId,
     eventType: "APPROVAL_GRANTED",
     actor: "operator",
     payload,
     ts: now,
   });
-  return { ok: true };
+
+  return withMandateLock(spend.mandateId, () =>
+    reserveThenPay(deps, {
+      spendId,
+      mandateRow: spend.mandate,
+      amountPaise: spend.amountPaise,
+      counterpartyId: spend.counterpartyId,
+      invoiceId: spend.invoiceId ?? randomUUID(),
+      resource: "compute/run",
+      checks: decision.checks,
+    }),
+  );
 }
 
 export { appendAudit, classifyTool, extractAmountPaise, extractCounterparty };

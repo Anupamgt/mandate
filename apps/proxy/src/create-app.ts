@@ -7,6 +7,7 @@ import {
   consumeProof,
   handleWebhook,
   issueMandate,
+  listPendingApprovals,
   proposeSpend,
   remainingBudget,
   revokeMandate,
@@ -112,10 +113,26 @@ export function createApp(deps: ProxyDeps) {
     }
   });
 
+  app.get("/spend/pending-approvals", async (c) => {
+    try {
+      return c.json(await listPendingApprovals(deps));
+    } catch (e) {
+      return errorJson(c, e);
+    }
+  });
+
   app.post("/spend/:id/approve", async (c) => {
     const body = await c.req.json();
     try {
-      return c.json(await approveStepUp(deps, c.req.param("id"), body.signature));
+      return c.json(
+        await approveStepUp(
+          deps,
+          c.req.param("id"),
+          body.signature,
+          body.approved_at,
+          body.spend_request_id,
+        ),
+      );
     } catch (e) {
       return errorJson(c, e);
     }
