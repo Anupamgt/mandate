@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NlMandateForm } from "@/components/nl-mandate-form";
 import { budgetPercent, formatRupeesFromPaise, parsePaiseInput } from "@/lib/format";
 
 const PROXY = process.env.NEXT_PUBLIC_PROXY_URL ?? "http://127.0.0.1:18787";
@@ -524,9 +525,24 @@ export default function Page() {
           <section id="mandate" className="scroll-mt-24 mt-16">
             <h2 className="text-2xl font-semibold tracking-tight">Issue a mandate</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-              Signed on this device. The proxy holds only the public key. Remaining budget is settled plus live
-              reservations against the cumulative cap.
+              Type intent in plain English, review the structured draft and readback, then sign on this device. The
+              proxy holds only the public key. Remaining budget is settled plus live reservations against the
+              cumulative cap.
             </p>
+            <p className="mt-2 text-sm">
+              <a href="/mandates/new" className="text-primary underline-offset-2 hover:underline">
+                Open dedicated authoring page
+              </a>
+            </p>
+            <NlMandateForm
+              proxy={PROXY}
+              busy={busy}
+              onBusy={setBusy}
+              onError={setError}
+              ensureKeys={ensureKeys}
+              signBody={signBody}
+              onIssued={refresh}
+            />
             <Card className="mt-6">
               <CardHeader>
                 <div className="flex items-start justify-between gap-3">

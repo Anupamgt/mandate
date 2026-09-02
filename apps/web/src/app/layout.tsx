@@ -23,7 +23,15 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} ${ibm.variable} antialiased`}>{children}</body>
+      <body className={`${inter.variable} ${ibm.variable} antialiased`}>
+        <a
+          href="/mandates/new"
+          className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:bg-card focus:px-2 focus:py-1"
+        >
+          Author mandate
+        </a>
+        {children}
+      </body>
     </html>
   );
 }

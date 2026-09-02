@@ -17,6 +17,7 @@ import { type McpSession } from "./mcp/jsonrpc.js";
 import { dispatchMcp } from "./mcp/handlers.js";
 import { loadUpstreamTools } from "./classify.js";
 import { governToolCall } from "./mcp/govern.js";
+import { buildMandateDraft } from "./nl-llm.js";
 
 export function createApp(deps: ProxyDeps) {
   const app = new Hono();
@@ -34,6 +35,12 @@ export function createApp(deps: ProxyDeps) {
     }
     deps.operatorPublicKeyHex = key;
     return c.json({ ok: true });
+  });
+
+  app.post("/mandates/draft", async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const draft = await buildMandateDraft((body as { intent?: unknown }).intent, deps.now());
+    return c.json(draft);
   });
 
   app.post("/mandates", async (c) => {
