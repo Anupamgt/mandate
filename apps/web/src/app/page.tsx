@@ -129,7 +129,6 @@ export default function Page() {
   const [treeOpen, setTreeOpen] = useState(true);
   const [search, setSearch] = useState("");
   const [ask, setAsk] = useState("");
-  const [copied, setCopied] = useState(false);
   const [benefitsOpen, setBenefitsOpen] = useState(true);
   const [mcpOpen, setMcpOpen] = useState(false);
 
@@ -411,17 +410,6 @@ export default function Page() {
     }
   }
 
-  async function copyPage() {
-    const text = [
-      "Mandate operator console",
-      selected ? `Mandate ${selected.id} ${selected.status} remaining ${formatRupeesFromPaise(selected.remaining_paise)}` : "No mandate",
-      events[0] ? `Last decision ${events[0].decision} ${events[0].reason}` : "No decisions yet",
-    ].join("\n");
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1600);
-  }
-
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-20 border-b border-border bg-background/95 backdrop-blur">
@@ -489,12 +477,7 @@ export default function Page() {
 
         <main className="relative min-w-0 px-4 py-8 sm:px-8 lg:px-12">
           <p className="text-sm font-medium text-primary">Mandate</p>
-          <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
-            <h1 className="max-w-3xl text-4xl font-bold tracking-tight sm:text-5xl">Operator console</h1>
-            <Button variant="outline" size="sm" onClick={() => void copyPage()}>
-              {copied ? "Copied" : "Copy page"}
-            </Button>
-          </div>
+          <h1 className="mt-3 max-w-3xl text-4xl font-bold tracking-tight sm:text-5xl">Operator console</h1>
           <p className="mt-4 max-w-3xl text-base leading-7 text-muted-foreground">
             Bounded, revocable authority between any MCP agent and Razorpay money tools. The agent never gets a pay
             button. Policy is deterministic. Every attempt is hash-chained.
