@@ -23,11 +23,23 @@ Amounts are integer **paise** everywhere. Display them as rupees.
 
 ## Quickstart
 
-Three commands. Node 20+, [pnpm](https://pnpm.io/) 11.
+Three commands. Node 20+, [pnpm](https://pnpm.io/) 11. Prisma reads `packages/db/.env`; copy both env files. PowerShell does not support `&&` — use the block below or run each line separately.
+
+**Windows PowerShell:**
+
+```powershell
+Copy-Item .env.example .env; Copy-Item packages/db/.env.example packages/db/.env
+# optional: fill RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET (rzp_test_ only)
+pnpm install
+pnpm dev
+```
+
+**macOS / Linux:**
 
 ```bash
+cp .env.example .env && cp packages/db/.env.example packages/db/.env
+# optional: fill RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET (rzp_test_ only)
 pnpm install
-cp .env.example .env
 pnpm dev
 ```
 
