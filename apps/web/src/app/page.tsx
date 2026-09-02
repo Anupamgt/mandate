@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NlMandateForm } from "@/components/nl-mandate-form";
 import { formatRupeesFromPaise, parsePaiseInput } from "@/lib/format";
+import { liveEventFromLocal, liveEventFromSse, type LiveEvent } from "@/lib/live-events";
 import { loadMandateRows, revokeRequestBody, toMandateList, type Mandate } from "@/lib/mandates";
 
 const PROXY = process.env.NEXT_PUBLIC_PROXY_URL ?? "http://127.0.0.1:18787";
@@ -68,14 +69,6 @@ type Decision = {
   checks?: string[];
   proof?: { invoice_id: string; mac: string; resource: string; expires_at: string };
   error?: string;
-};
-
-type LiveEvent = {
-  id: string;
-  ts: string;
-  reason: string;
-  decision: string;
-  source: "local" | "stream";
 };
 
 function relativeTime(ts: number, now: number): string {
@@ -206,26 +199,10 @@ export default function Page() {
       es = new EventSource(`${PROXY}/events`);
       es.addEventListener("open", () => setSseOn(true));
       es.addEventListener("decision", (ev) => {
-        const row = JSON.parse((ev as MessageEvent).data) as {
-          seq?: number;
-          reasonCode?: string;
-          decision?: string;
-          ts?: string;
-          spendRequestId?: string;
-        };
-        const id = row.spendRequestId ?? String(row.seq ?? Date.now());
+        const next = liveEventFromSse(JSON.parse((ev as MessageEvent).data));
         setEvents((prev) => {
-          if (prev.some((p) => p.id === id)) return prev;
-          return [
-            {
-              id,
-              ts: row.ts ?? new Date().toISOString(),
-              reason: row.reasonCode ?? "DECISION",
-              decision: row.decision ?? "DENY",
-              source: "stream" as const,
-            },
-            ...prev,
-          ].slice(0, 16);
+          if (prev.some((p) => p.id === next.id)) return prev;
+          return [next, ...prev].slice(0, 16);
         });
       });
       es.onerror = () => {
@@ -336,19 +313,10 @@ export default function Page() {
         }),
       });
       const json = (await res.json()) as Decision;
-      const id = json.spend_request_id ?? `local-${Date.now()}`;
+      const next = liveEventFromLocal(json);
       setEvents((prev) => {
-        if (prev.some((p) => p.id === id)) return prev;
-        return [
-          {
-            id,
-            ts: new Date().toISOString(),
-            reason: json.reason_code ?? json.error ?? "ERROR",
-            decision: json.decision ?? "ERR",
-            source: "local" as const,
-          },
-          ...prev,
-        ].slice(0, 16);
+        if (prev.some((p) => p.id === next.id)) return prev;
+        return [next, ...prev].slice(0, 16);
       });
       await refresh();
     } catch (e) {
@@ -661,7 +629,9 @@ export default function Page() {
 
           <section id="activity" className="scroll-mt-24 mt-16">
             <h2 className="text-2xl font-semibold tracking-tight">Live activity</h2>
-            <p className="mt-2 text-sm text-muted-foreground">SSE from the proxy, plus decisions from this browser.</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              SSE from the proxy: decision, reason code, and checks[]. Plus decisions from this browser.
+            </p>
             <Card className="mt-6">
               <CardHeader>
                 <div className="flex items-center justify-between gap-2">
@@ -681,7 +651,16 @@ export default function Page() {
                       <li key={ev.id} className="row-enter flex items-start justify-between gap-3 py-3">
                         <div>
                           <p className="font-mono text-sm font-medium">{ev.reason}</p>
-                          <p className="text-xs text-muted-foreground">
+                          {ev.checks.length > 0 ? (
+                            <ul className="mt-1 space-y-0.5">
+                              {ev.checks.map((check) => (
+                                <li key={check} className="font-mono text-[11px] text-muted-foreground">
+                                  {check}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : null}
+                          <p className="mt-1 text-xs text-muted-foreground">
                             {relativeTime(Date.parse(ev.ts) || nowTick, nowTick)} · {ev.source === "stream" ? "stream" : "this session"}
                           </p>
                         </div>

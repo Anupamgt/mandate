@@ -19,6 +19,7 @@ import { dispatchMcp } from "./mcp/handlers.js";
 import { loadUpstreamTools } from "./classify.js";
 import { governToolCall } from "./mcp/govern.js";
 import { buildMandateDraft } from "./nl-llm.js";
+import { decisionSsePayload, parseChecksJson } from "./sse.js";
 
 export function createApp(deps: ProxyDeps) {
   const app = new Hono();
@@ -190,9 +191,27 @@ export function createApp(deps: ProxyDeps) {
             where: { seq: { gt: lastSeq }, eventType: "DECISION" },
             orderBy: { seq: "asc" },
           });
+          const spendIds = [
+            ...new Set(rows.map((r) => r.spendRequestId).filter((id): id is string => Boolean(id))),
+          ];
+          const decisions =
+            spendIds.length === 0
+              ? []
+              : await deps.prisma.decision.findMany({
+                  where: { spendRequestId: { in: spendIds } },
+                  select: { spendRequestId: true, checksJson: true },
+                });
+          const checksBySpend = new Map(
+            decisions.map((d) => [d.spendRequestId, parseChecksJson(d.checksJson)] as const),
+          );
           for (const row of rows) {
             lastSeq = row.seq;
-            await stream.writeSSE({ data: JSON.stringify(row), event: "decision", id: String(row.seq) });
+            const checks = row.spendRequestId ? (checksBySpend.get(row.spendRequestId) ?? []) : [];
+            await stream.writeSSE({
+              data: JSON.stringify(decisionSsePayload(row, checks)),
+              event: "decision",
+              id: String(row.seq),
+            });
           }
           await stream.writeSSE({ data: "{}", event: "ping", id: "ping" });
           await stream.sleep(800);

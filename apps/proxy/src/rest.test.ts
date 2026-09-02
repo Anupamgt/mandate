@@ -364,4 +364,92 @@ describe("REST gate", () => {
     expect(await deps.prisma.settlement.count({ where: { spendRequestId: stepped.spend_request_id } })).toBe(0);
     expect(await deps.prisma.approval.count({ where: { spendRequestId: stepped.spend_request_id } })).toBe(0);
   });
+
+  it("FR-71 GET /events SSE includes decision, reasonCode, and checks", async () => {
+    const { app, keys, deps } = await makeTestProxy();
+    const parsed = parseMandateBody(body);
+    const signature = await signMandateBody(parsed, keys.privateKeyHex);
+    await app.request("/mandates", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ body: parsed, signature }),
+    });
+
+    const deny = await app.request("/spend/propose", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        agent_id: "agent_demo",
+        tool: "create_order",
+        counterparty_id: "prov_compute_a",
+        amount_paise: 20_000,
+        purpose: "too much",
+      }),
+    });
+    const denied = (await deny.json()) as {
+      spend_request_id: string;
+      decision: string;
+      reason_code: string;
+      checks: string[];
+    };
+    expect(denied.reason_code).toBe("PER_TXN_CAP_EXCEEDED");
+    expect(denied.checks).toContain("per_txn:exceeded");
+
+    const stored = await deps.prisma.decision.findUnique({
+      where: { spendRequestId: denied.spend_request_id },
+    });
+    expect(JSON.parse(stored?.checksJson ?? "[]")).toEqual(denied.checks);
+
+    const res = await app.request("/events");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type") ?? "").toMatch(/text\/event-stream/);
+    const payload = await readSseDecision(res, denied.spend_request_id);
+    expect(payload.decision).toBe("DENY");
+    expect(payload.reasonCode).toBe("PER_TXN_CAP_EXCEEDED");
+    expect(payload.checks).toEqual(denied.checks);
+    expect(payload.spendRequestId).toBe(denied.spend_request_id);
+  });
 });
+
+async function readSseDecision(
+  res: Response,
+  spendRequestId: string,
+): Promise<{
+  decision: string;
+  reasonCode: string;
+  checks: string[];
+  spendRequestId: string;
+}> {
+  if (!res.body) throw new Error("no SSE body");
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  const timer = setTimeout(() => {
+    void reader.cancel();
+  }, 5_000);
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const frames = buf.split(/\r?\n\r?\n/);
+      buf = frames.pop() ?? "";
+      for (const frame of frames) {
+        const event = /(?:^|\n)event:\s*(\S+)/.exec(frame)?.[1];
+        const data = /(?:^|\n)data:\s*(.+)/.exec(frame)?.[1];
+        if (event !== "decision" || !data) continue;
+        const parsed = JSON.parse(data) as {
+          decision: string;
+          reasonCode: string;
+          checks: string[];
+          spendRequestId: string;
+        };
+        if (parsed.spendRequestId === spendRequestId) return parsed;
+      }
+    }
+    throw new Error("timed out waiting for SSE decision");
+  } finally {
+    clearTimeout(timer);
+    await reader.cancel();
+  }
+}

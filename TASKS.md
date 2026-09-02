@@ -21,7 +21,7 @@ Ordered by the release plan. One Cursor Agent session per line. Do not start P2 
 - [x] T-017  FR-20/21/22/23 MCP proxy stdio + streamable HTTP
 - [x] T-018  FR-82    pnpm redteam → REDTEAM.md
 - [x] T-019  FR-70    mandates list
-- [ ] T-020  FR-71    SSE checks in live stream
+- [x] T-020  FR-71    SSE checks in live stream
 - [x] T-021  FR-73    step-up inbox
 - [x] T-022  FR-05/74 NL authoring
 - [ ] T-023  FR-52/72 Explain narrative
