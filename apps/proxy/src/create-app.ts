@@ -12,6 +12,7 @@ import {
   remainingBudget,
   revokeMandate,
   verifyAudit,
+  attachRationale,
   type ProxyDeps,
 } from "./spend.js";
 import { type McpSession } from "./mcp/jsonrpc.js";
@@ -109,7 +110,7 @@ export function createApp(deps: ProxyDeps) {
         counterpartyId: body.counterparty_id,
         amountPaise: Number(body.amount_paise),
         purpose: String(body.purpose ?? "spend"),
-        rationale: body.rationale,
+        rationale: typeof body.rationale === "string" ? body.rationale.slice(0, 256) : body.rationale,
         invoiceId: body.invoice_id,
         resource: body.resource,
         failProvision: Boolean(body.fail_provision),
@@ -168,7 +169,7 @@ export function createApp(deps: ProxyDeps) {
       where: mandateId ? { mandateId } : {},
       orderBy: { seq: "asc" },
     });
-    return c.json({ rows });
+    return c.json({ rows: await attachRationale(deps.prisma, rows) });
   });
 
   app.get("/audit/verify", async (c) => c.json(await verifyAudit(deps)));
@@ -186,10 +187,13 @@ export function createApp(deps: ProxyDeps) {
       let lastSeq = 0;
       try {
         while (true) {
-          const rows = await deps.prisma.auditRow.findMany({
-            where: { seq: { gt: lastSeq }, eventType: "DECISION" },
-            orderBy: { seq: "asc" },
-          });
+          const rows = await attachRationale(
+            deps.prisma,
+            await deps.prisma.auditRow.findMany({
+              where: { seq: { gt: lastSeq }, eventType: "DECISION" },
+              orderBy: { seq: "asc" },
+            }),
+          );
           for (const row of rows) {
             lastSeq = row.seq;
             await stream.writeSSE({ data: JSON.stringify(row), event: "decision", id: String(row.seq) });
