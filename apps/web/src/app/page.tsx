@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { budgetPercent, formatRupeesFromPaise, parsePaiseInput } from "@/lib/format";
+import { formatRupeesFromPaise, parsePaiseInput } from "@/lib/format";
+import { revokeRequestBody, toMandateList, type Mandate } from "@/lib/mandates";
 
 const PROXY = process.env.NEXT_PUBLIC_PROXY_URL ?? "http://127.0.0.1:18787";
 
@@ -30,7 +31,7 @@ const AMOUNT_CHIPS = [
 
 const PAGES = [
   { id: "snapshot", label: "Snapshot" },
-  { id: "mandate", label: "Issue a mandate" },
+  { id: "mandate", label: "Mandates" },
   { id: "spend", label: "Propose spend" },
   { id: "activity", label: "Live activity" },
   { id: "how-it-works", label: "How evaluate() works" },
@@ -38,7 +39,7 @@ const PAGES = [
 
 const TOC = [
   { id: "snapshot", label: "Snapshot" },
-  { id: "mandate", label: "Issue a mandate" },
+  { id: "mandate", label: "Mandates" },
   { id: "spend", label: "Propose spend" },
   { id: "activity", label: "Live activity" },
   { id: "how-it-works", label: "How evaluate() works" },
@@ -58,14 +59,6 @@ function sortValue(value: unknown): unknown {
   }
   return out;
 }
-
-type Mandate = {
-  id: string;
-  status: string;
-  agent_id: string;
-  remaining_paise: number;
-  body: { max_total_paise: number; max_per_txn_paise: number; purpose: string; step_up_above_paise?: number };
-};
 
 type Decision = {
   spend_request_id?: string;
@@ -132,12 +125,8 @@ export default function Page() {
   const [benefitsOpen, setBenefitsOpen] = useState(true);
   const [mcpOpen, setMcpOpen] = useState(false);
 
-  const selected = mandates[0];
-  const remainingPct = useMemo(() => {
-    if (!selected) return 0;
-    return budgetPercent(selected.remaining_paise, selected.body.max_total_paise);
-  }, [selected]);
-  const spentPct = 100 - remainingPct;
+  const rows = useMemo(() => toMandateList(mandates), [mandates]);
+  const selected = rows[0];
   const parsedAmount = parsePaiseInput(amount);
   const pageIndex = PAGES.findIndex((p) => p.id === section);
   const prevPage = pageIndex > 0 ? PAGES[pageIndex - 1] : undefined;
@@ -234,7 +223,7 @@ export default function Page() {
               ts: row.ts ?? new Date().toISOString(),
               reason: row.reasonCode ?? "DECISION",
               decision: row.decision ?? "DENY",
-              source: "stream",
+              source: "stream" as const,
             },
             ...prev,
           ].slice(0, 16);
@@ -357,7 +346,7 @@ export default function Page() {
             ts: new Date().toISOString(),
             reason: json.reason_code ?? json.error ?? "ERROR",
             decision: json.decision ?? "ERR",
-            source: "local",
+            source: "local" as const,
           },
           ...prev,
         ].slice(0, 16);
@@ -370,17 +359,14 @@ export default function Page() {
     }
   }
 
-  async function revoke() {
-    if (!selected || !keys) return;
-    setBusy("revoke");
+  async function revoke(mandateId: string) {
+    if (!keys) return;
+    setError(null);
+    setBusy(`revoke:${mandateId}`);
     try {
-      const payload = {
-        mandate_id: selected.id,
-        reason: "operator stop",
-        revoked_at: new Date().toISOString(),
-      };
+      const payload = revokeRequestBody(mandateId, "operator stop", new Date().toISOString());
       const signature = await signBody(payload, keys.priv);
-      const res = await fetch(`${PROXY}/mandates/${selected.id}/revoke`, {
+      const res = await fetch(`${PROXY}/mandates/${mandateId}/revoke`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ ...payload, signature }),
@@ -511,7 +497,7 @@ export default function Page() {
               <Stat
                 label="Mandate"
                 value={selected?.status ?? "NONE"}
-                sub={selected ? selected.agent_id : "No agent bound"}
+                sub={selected ? `${rows.length} listed · ${selected.agent_id}` : "No agent bound"}
               />
               <Stat
                 label="Audit chain"
@@ -522,53 +508,80 @@ export default function Page() {
           </section>
 
           <section id="mandate" className="scroll-mt-24 mt-16">
-            <h2 className="text-2xl font-semibold tracking-tight">Issue a mandate</h2>
+            <h2 className="text-2xl font-semibold tracking-tight">Mandates</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-              Signed on this device. The proxy holds only the public key. Remaining budget is settled plus live
-              reservations against the cumulative cap.
+              Every mandate from GET /mandates. Remaining-budget bar is settled plus reserved over the cumulative
+              cap. Signed on this device — the proxy holds only the public key.
             </p>
             <Card className="mt-6">
               <CardHeader>
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <CardTitle>Active authority</CardTitle>
-                    <CardDescription>Demo cap is ₹500 total / ₹100 per txn.</CardDescription>
+                    <CardTitle>Authority</CardTitle>
+                    <CardDescription>Demo cap is ₹500 total / ₹100 per txn. Amounts POST as integer paise.</CardDescription>
                   </div>
-                  {selected ? <Badge variant={selected.status === "ACTIVE" ? "ok" : "deny"}>{selected.status}</Badge> : null}
+                  <Badge variant={rows.length > 0 ? "ok" : "default"}>{rows.length} listed</Badge>
                 </div>
               </CardHeader>
               <CardContent className="space-y-5">
                 {loading ? (
                   <p className="text-sm text-muted-foreground">Loading mandates…</p>
-                ) : selected ? (
-                  <>
-                    <div className="flex flex-wrap items-end justify-between gap-2 text-sm">
-                      <p className="font-mono text-xs text-muted-foreground">
-                        {selected.id.slice(0, 8)}… · {selected.agent_id} · {selected.body.purpose}
-                      </p>
-                      <p className="font-mono text-sm font-semibold">
-                        {formatRupeesFromPaise(selected.remaining_paise)} left
-                      </p>
-                    </div>
-                    <div>
-                      <div className="mb-1 flex justify-between text-xs text-muted-foreground">
-                        <span>Spent {spentPct}%</span>
-                        <span>Available {remainingPct}%</span>
-                      </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-muted">
-                        <div className="budget-fill h-full rounded-full bg-primary" style={{ width: `${remainingPct}%` }} />
-                      </div>
-                    </div>
-                  </>
-                ) : (
+                ) : rows.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No mandate yet. Issue one to start the demo.</p>
+                ) : (
+                  <ul className="space-y-5">
+                    {rows.map((row) => (
+                      <li key={row.id} className="space-y-3 border-b border-border pb-5 last:border-b-0 last:pb-0">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div>
+                            <p className="font-mono text-xs text-muted-foreground">
+                              {row.id.slice(0, 8)}… · {row.agent_id} · {row.body.purpose}
+                            </p>
+                            <p className="mt-1 font-mono text-sm font-semibold">
+                              {formatRupeesFromPaise(row.remaining_paise)} left of{" "}
+                              {formatRupeesFromPaise(row.body.max_total_paise)}
+                            </p>
+                          </div>
+                          <Badge variant={row.status === "ACTIVE" ? "ok" : row.status === "EXPIRED" ? "warn" : "deny"}>
+                            {row.status}
+                          </Badge>
+                        </div>
+                        <div>
+                          <div className="mb-1 flex justify-between text-xs text-muted-foreground">
+                            <span>
+                              Used {row.used_percent}% · {formatRupeesFromPaise(row.used_paise)} settled+reserved
+                            </span>
+                            <span>Available {row.remaining_percent}%</span>
+                          </div>
+                          <div
+                            className="h-2 overflow-hidden rounded-full bg-muted"
+                            role="progressbar"
+                            aria-label="Remaining budget"
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                            aria-valuenow={row.used_percent}
+                          >
+                            <div
+                              className="budget-fill h-full rounded-full bg-primary"
+                              style={{ width: `${row.used_percent}%` }}
+                            />
+                          </div>
+                        </div>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => void revoke(row.id)}
+                          disabled={!row.can_revoke || !keys || busy !== null}
+                        >
+                          {busy === `revoke:${row.id}` ? "Revoking…" : "Revoke"}
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
                 )}
                 <div className="flex flex-wrap gap-2">
                   <Button onClick={() => void issueDemo()} disabled={busy !== null}>
                     {busy === "issue" ? "Signing…" : "Issue demo mandate"}
-                  </Button>
-                  <Button variant="destructive" onClick={() => void revoke()} disabled={!selected || !keys || busy !== null}>
-                    {busy === "revoke" ? "Revoking…" : "Revoke"}
                   </Button>
                 </div>
               </CardContent>

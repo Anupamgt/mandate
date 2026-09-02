@@ -90,6 +90,35 @@ describe("REST gate", () => {
     expect(afterJson.reason_code).toBe("MANDATE_REVOKED");
   });
 
+  it("FR-70 GET /mandates returns remaining_paise for every mandate", async () => {
+    const { app, keys } = await makeTestProxy();
+    const first = parseMandateBody(body);
+    const second = parseMandateBody({ ...body, agent_id: "agent_b", purpose: "other" });
+    const issued = await Promise.all(
+      [first, second].map(async (parsed) => {
+        const signature = await signMandateBody(parsed, keys.privateKeyHex);
+        const res = await app.request("/mandates", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ body: parsed, signature }),
+        });
+        expect(res.status).toBe(201);
+        return (await res.json()) as { id: string };
+      }),
+    );
+    const list = await app.request("/mandates");
+    const json = (await list.json()) as {
+      mandates: Array<{ id: string; status: string; remaining_paise: number; body: { max_total_paise: number } }>;
+    };
+    expect(json.mandates).toHaveLength(2);
+    expect(json.mandates.map((m) => m.id).sort()).toEqual(issued.map((i) => i.id).sort());
+    for (const row of json.mandates) {
+      expect(row.status).toBe("ACTIVE");
+      expect(row.remaining_paise).toBe(50_000);
+      expect(row.body.max_total_paise).toBe(50_000);
+    }
+  });
+
   it("FR-13 ten parallel ₹100 vs ₹500 cap", async () => {
     const { app, keys } = await makeTestProxy();
     const parsed = parseMandateBody({
