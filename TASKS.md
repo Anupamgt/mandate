@@ -17,10 +17,19 @@ Ordered by the release plan. One Cursor Agent session per line. Do not start P2 
 - [x] T-012  FR-40-42 resource-server 402 + proof replay + HMAC
 - [x] T-013  FR-50-51 reconciler reverse / EXCEPTION_UNRESOLVED
 - [x] T-015  FR-80-81 pnpm batch → metrics.json false_allows=0
+- [ ] T-016  FR-31    one live rzp_test_ settlement
 - [x] T-017  FR-20/21/22/23 MCP proxy stdio + streamable HTTP
 - [x] T-018  FR-82    pnpm redteam → REDTEAM.md
-- [ ] T-016  FR-31    one live rzp_test_ settlement (skipped without keys)
-- [ ] T-019  FR-70-74 dashboard P1 extras (NL authoring, SSE inbox)
+- [x] T-019  FR-70    mandates list
+- [ ] T-020  FR-71    SSE checks in live stream
+- [x] T-021  FR-73    step-up inbox
+- [x] T-022  FR-05/74 NL authoring
+- [ ] T-023  FR-52/72 Explain narrative
+- [ ] T-024  FR-44    rationale visible
+- [ ] T-025  FR-82    re-run pnpm redteam + pnpm check before v0.4.0
+- [ ] T-026  FR-83    README draft (human rewrites limitations)
+- [ ] T-027           video timing only (150 wpm, PRD §12)
+- [ ] T-028           fresh clone < 5 min then v1.0.0
 ```
 
 ## Tags
