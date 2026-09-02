@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+/* Razorpay Docs dark shell: charcoal canvas, dodger blue accent. */
+@theme {
+  --color-background: #0b0c10;
+  --color-foreground: #f4f6fb;
+  --color-card: #12141c;
+  --color-card-foreground: #f4f6fb;
+  --color-muted: #171922;
+  --color-muted-foreground: #9aa3b5;
+  --color-border: #232733;
+  --color-input: #232733;
+  --color-primary: #0d94fb;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #0e1118;
+  --color-secondary-foreground: #f4f6fb;
+  --color-destructive: #f07167;
+  --color-ring: #0d94fb;
+  --color-success: #3dd68c;
+  --color-notice: #f5c16c;
+  --font-sans: var(--font-inter), "Inter", "Mulish", system-ui, sans-serif;
+  --font-mono: var(--font-ibm), ui-monospace, monospace;
+}
+
+html,
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  min-height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.85);
+  }
+}
+
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.live-dot {
+  animation: pulse-dot 1.6s ease-in-out infinite;
+}
+
+.row-enter {
+  animation: slide-in 280ms ease-out;
+}
+
+.budget-fill {
+  transform-origin: left;
+  transition: width 700ms cubic-bezier(0.22, 1, 0.36, 1);
+}

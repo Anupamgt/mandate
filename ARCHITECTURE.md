@@ -4,7 +4,7 @@
 
 | Status | Value |
 |---|---|
-| Tag | `v0.1.0` |
+| Tag | `v0.3.0` |
 | Track | **TBD at `v0.3.0`** (Open Track vs Track 01 Agentic Commerce) |
 | Day-0 rail (FR-31) | **`s2s_order`** — see §8 |
 | Day-0 MCP dump (FR-20) | **Confirmed** — `https://mcp.razorpay.com/mcp`, 42 tools in `apps/proxy/config/upstream-tools.json` |
@@ -76,6 +76,8 @@ Pure function. No I/O, no LLM, no `Date.now()` — `now` is passed in.
 7. per-txn cap  
 8. cumulative cap (settled + live reservations)  
 9. step-up threshold  
+
+`RATE_LIMITED` is **SEC-08**, not a policy check. The proxy applies it (e.g. 30 `propose_spend` decisions / agent / minute) **before** calling `evaluate()`.
 
 **Reserve-then-settle:** on ALLOW the proxy inserts a `Reservation` in the same DB transaction as the cumulative check. Reservations expire after 60s if unsettled.
 
@@ -331,4 +333,4 @@ P0 = submission fails without it. P1 = materially raises odds. P2 = ship if time
 | Date | Change |
 |---|---|
 | 2026-09-01 | Initial public architecture. Rail/MCP Day-0 blocked on keys. Track TBD at v0.3.0. |
-| 2026-09-01 | Day-0: rail = `s2s_order`; MCP 42 tools; payouts REST 400. Monorepo + Prisma + shared enums; `pnpm typecheck` green. |
+| 2026-09-01 | `v0.3.0`: evaluate() + Ed25519 mandates + hash-chain audit + MockRail/S2S rail + REST gate + MCP stdio/HTTP proxy + batch/red-team + operator console. Track still TBD. |

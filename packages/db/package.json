@@ -1,6 +1,6 @@
 {
   "name": "@mandate/db",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "exports": {
@@ -11,7 +11,8 @@
   },
   "scripts": {
     "generate": "prisma generate",
-    "migrate": "prisma migrate dev"
+    "migrate": "prisma migrate dev",
+    "push": "prisma db push"
   },
   "dependencies": {
     "@prisma/client": "^6.14.0"

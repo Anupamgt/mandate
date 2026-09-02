@@ -1,7 +1,1 @@
-import { Hono } from "hono";
-
-const app = new Hono();
-
-app.get("/health", (c) => c.json({ ok: true, name: "mandate-resource-server" }));
-
-export { app };
+export { createResourceApp, COMPUTE_TIERS, LLM_TIERS } from "./app.js";

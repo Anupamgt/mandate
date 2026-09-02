@@ -4,6 +4,6 @@
     "rootDir": "src",
     "outDir": "dist"
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/index.ts", "src/tools.test.ts"],
   "references": [{ "path": "../../packages/shared" }]
 }

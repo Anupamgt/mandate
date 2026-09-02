@@ -14,3 +14,4 @@ export {
   type EventType,
 } from "./event-types.js";
 export { TOOL_CLASSES, isToolClass, type ToolClass } from "./tool-class.js";
+export { canonicalJson } from "./canonical-json.js";

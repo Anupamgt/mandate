@@ -1,7 +1,2 @@
-import { Hono } from "hono";
-
-const app = new Hono();
-
-app.get("/health", (c) => c.json({ ok: true, name: "mandate-proxy" }));
-
-export { app };
+export { createApp } from "./create-app.js";
+export { createAppFromEnv } from "./runtime.js";

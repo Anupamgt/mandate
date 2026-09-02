@@ -5,6 +5,5 @@
     "outDir": "dist"
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["src/**/*.test.ts"],
-  "references": [{ "path": "../shared" }]
+  "exclude": ["src/**/*.test.ts", "src/cli/**/*.ts"]
 }
