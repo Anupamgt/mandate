@@ -19,6 +19,7 @@ import { dispatchMcp } from "./mcp/handlers.js";
 import { loadUpstreamTools } from "./classify.js";
 import { governToolCall } from "./mcp/govern.js";
 import { buildMandateDraft } from "./nl-llm.js";
+import { explainException } from "./explain.js";
 import { decisionSsePayload, parseChecksJson } from "./sse.js";
 
 export function createApp(deps: ProxyDeps) {
@@ -180,6 +181,14 @@ export function createApp(deps: ProxyDeps) {
       orderBy: { seq: "desc" },
     });
     return c.json({ exceptions: rows });
+  });
+
+  app.post("/exceptions/:id/explain", async (c) => {
+    try {
+      return c.json(await explainException(deps.prisma, c.req.param("id")));
+    } catch (e) {
+      return errorJson(c, e);
+    }
   });
 
   app.get("/events", (c) =>
