@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NlMandateForm } from "@/components/nl-mandate-form";
 import { formatRupeesFromPaise, parsePaiseInput } from "@/lib/format";
 import { loadMandateRows, revokeRequestBody, toMandateList, type Mandate } from "@/lib/mandates";
 
@@ -509,8 +510,23 @@ export default function Page() {
             <h2 className="text-2xl font-semibold tracking-tight">Mandates</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
               Every mandate from GET /mandates. Remaining-budget bar is settled plus reserved over the cumulative
-              cap. Signed on this device — the proxy holds only the public key.
+              cap. Type intent in plain English, review the structured draft and readback, then sign on this device.
+              The proxy holds only the public key.
             </p>
+            <p className="mt-2 text-sm">
+              <a href="/mandates/new" className="text-primary underline-offset-2 hover:underline">
+                Open dedicated authoring page
+              </a>
+            </p>
+            <NlMandateForm
+              proxy={PROXY}
+              busy={busy}
+              onBusy={setBusy}
+              onError={setError}
+              ensureKeys={ensureKeys}
+              signBody={signBody}
+              onIssued={refresh}
+            />
             <Card className="mt-6">
               <CardHeader>
                 <div className="flex items-start justify-between gap-3">

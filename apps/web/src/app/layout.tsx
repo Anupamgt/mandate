@@ -27,6 +27,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <a href="/approvals" className="fixed bottom-20 right-4 z-40 text-xs text-muted-foreground hover:text-primary">
           Step-up inbox
         </a>
+        <a
+          href="/mandates/new"
+          className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:bg-card focus:px-2 focus:py-1"
+        >
+          Author mandate
+        </a>
         {children}
       </body>
     </html>
