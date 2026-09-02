@@ -24,9 +24,14 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body className={`${inter.variable} ${ibm.variable} antialiased`}>
-        <a href="/approvals" className="fixed bottom-20 right-4 z-40 text-xs text-muted-foreground hover:text-primary">
-          Step-up inbox
-        </a>
+        <div className="fixed bottom-20 right-4 z-40 flex flex-col items-end gap-1 text-xs">
+          <a href="/exceptions" className="text-muted-foreground hover:text-primary">
+            Exceptions
+          </a>
+          <a href="/approvals" className="text-muted-foreground hover:text-primary">
+            Step-up inbox
+          </a>
+        </div>
         <a
           href="/mandates/new"
           className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:bg-card focus:px-2 focus:py-1"

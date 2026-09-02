@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ExceptionsPanel } from "@/components/exceptions-panel";
 import { NlMandateForm } from "@/components/nl-mandate-form";
 import { formatRupeesFromPaise, parsePaiseInput } from "@/lib/format";
 import { loadMandateRows, revokeRequestBody, toMandateList, type Mandate } from "@/lib/mandates";
@@ -35,6 +36,7 @@ const PAGES = [
   { id: "mandate", label: "Mandates" },
   { id: "spend", label: "Propose spend" },
   { id: "activity", label: "Live activity" },
+  { id: "exceptions", label: "Exceptions" },
   { id: "how-it-works", label: "How evaluate() works" },
 ] as const;
 
@@ -43,6 +45,7 @@ const TOC = [
   { id: "mandate", label: "Mandates" },
   { id: "spend", label: "Propose spend" },
   { id: "activity", label: "Live activity" },
+  { id: "exceptions", label: "Exceptions" },
   { id: "how-it-works", label: "How evaluate() works" },
 ] as const;
 
@@ -692,6 +695,21 @@ export default function Page() {
                 )}
               </CardContent>
             </Card>
+          </section>
+
+          <section id="exceptions" className="scroll-mt-24 mt-16">
+            <h2 className="text-2xl font-semibold tracking-tight">Exceptions</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+              Explain asks the proxy for a prose timeline that cites every audit seq on the spend request. The
+              chain rows stay visible and are never updated. Dedicated page:{" "}
+              <a href="/exceptions" className="text-primary underline-offset-2 hover:underline">
+                /exceptions
+              </a>
+              .
+            </p>
+            <div className="mt-6">
+              <ExceptionsPanel proxy={PROXY} />
+            </div>
           </section>
 
           <section id="how-it-works" className="scroll-mt-24 mt-16 space-y-3">
