@@ -39,6 +39,42 @@ describe("FR-30/FR-32/FR-33 rails", () => {
     expect(calls[0]).toContain("/v1/orders");
   });
 
+  it("RazorpayTestRail falls back when create/json is unavailable", async () => {
+    const rail = new RazorpayTestRail({
+      keyId: "rzp_test_abc",
+      keySecret: "secret",
+      fetchImpl: async (url, init) => {
+        const u = String(url);
+        if (u.includes("/orders") && init?.method === "POST") {
+          return new Response(JSON.stringify({ id: "order_1" }), { status: 200 });
+        }
+        if (u.includes("/payments/create/json")) {
+          return new Response(JSON.stringify({ error: { description: "not found" } }), { status: 400 });
+        }
+        if (u.includes("/otp_submit/") && init?.method === "POST") {
+          return new Response(
+            JSON.stringify({
+              razorpay_payment_id: "pay_live",
+              razorpay_order_id: "order_1",
+              razorpay_signature: "sig",
+            }),
+            { status: 200 },
+          );
+        }
+        if (u.endsWith("/v1/payments") && init?.method === "POST") {
+          return new Response(
+            `<form action="https://api.razorpay.com/v1/payments/pay_live/otp_submit/abc"></form>`,
+            { status: 200, headers: { "Content-Type": "text/html" } },
+          );
+        }
+        return new Response("{}", { status: 404 });
+      },
+    });
+    const quote = await rail.quote(asPaise(100), "prov_a");
+    const paid = await rail.pay(quote, "m1", "inv_fb");
+    expect(paid.externalRef).toBe("pay_live");
+  });
+
   it("refuses live keys", () => {
     expect(
       () => new RazorpayTestRail({ keyId: "rzp_live_nope", keySecret: "x" }),
