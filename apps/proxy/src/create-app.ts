@@ -159,19 +159,22 @@ export function createApp(deps: ProxyDeps) {
 
   app.get("/events", (c) =>
     streamSSE(c, async (stream) => {
-      const start = deps.now();
       let lastSeq = 0;
-      for (let i = 0; i < 30; i += 1) {
-        const rows = await deps.prisma.auditRow.findMany({
-          where: { seq: { gt: lastSeq }, eventType: "DECISION" },
-          orderBy: { seq: "asc" },
-        });
-        for (const row of rows) {
-          lastSeq = row.seq;
-          await stream.writeSSE({ data: JSON.stringify(row), event: "decision", id: String(row.seq) });
+      try {
+        while (true) {
+          const rows = await deps.prisma.auditRow.findMany({
+            where: { seq: { gt: lastSeq }, eventType: "DECISION" },
+            orderBy: { seq: "asc" },
+          });
+          for (const row of rows) {
+            lastSeq = row.seq;
+            await stream.writeSSE({ data: JSON.stringify(row), event: "decision", id: String(row.seq) });
+          }
+          await stream.writeSSE({ data: "{}", event: "ping", id: "ping" });
+          await stream.sleep(800);
         }
-        await stream.sleep(500);
-        if (deps.now().getTime() - start.getTime() > 15_000) break;
+      } catch {
+        /* client disconnected */
       }
     }),
   );
