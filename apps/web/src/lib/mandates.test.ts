@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { revokeRequestBody, toMandateList, type Mandate } from "./mandates";
+import { loadMandateRows, revokeRequestBody, toMandateList, type Mandate } from "./mandates";
 
 function mandate(partial: Partial<Mandate> & Pick<Mandate, "id">): Mandate {
   return {
@@ -62,5 +62,43 @@ describe("FR-70 revoke payload", () => {
     expect(body).not.toHaveProperty("private_key");
     expect(body).not.toHaveProperty("priv");
     expect(body).not.toHaveProperty("signature");
+  });
+});
+
+describe("FR-70 remaining_paise from GET /mandates/:id", () => {
+  it("loads remaining_paise from the detail endpoint per row", async () => {
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/mandates") && !url.includes("/mandates/")) {
+        return new Response(
+          JSON.stringify({
+            mandates: [{ id: "m1", status: "ACTIVE", agent_id: "agent_1" }],
+          }),
+        );
+      }
+      if (url.endsWith("/mandates/m1")) {
+        return new Response(
+          JSON.stringify({
+            id: "m1",
+            status: "ACTIVE",
+            agent_id: "agent_1",
+            remaining_paise: 40_000,
+            body: { max_total_paise: 50_000, max_per_txn_paise: 10_000, purpose: "self-fund" },
+          }),
+        );
+      }
+      throw new Error(`unexpected url ${url}`);
+    };
+    const rows = await loadMandateRows("http://127.0.0.1:18787", fetchImpl);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.remaining_paise).toBe(40_000);
+    expect(rows[0]?.body.max_total_paise).toBe(50_000);
+  });
+
+  it("returns an empty list when the collection fetch fails", async () => {
+    const rows = await loadMandateRows("http://127.0.0.1:18787", async () => {
+      throw new Error("offline");
+    });
+    expect(rows).toEqual([]);
   });
 });

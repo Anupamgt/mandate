@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatRupeesFromPaise, parsePaiseInput } from "@/lib/format";
-import { revokeRequestBody, toMandateList, type Mandate } from "@/lib/mandates";
+import { loadMandateRows, revokeRequestBody, toMandateList, type Mandate } from "@/lib/mandates";
 
 const PROXY = process.env.NEXT_PUBLIC_PROXY_URL ?? "http://127.0.0.1:18787";
 
@@ -135,10 +135,8 @@ export default function Page() {
 
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch(`${PROXY}/mandates`);
-      if (!res.ok) return;
-      const json = (await res.json()) as { mandates: Mandate[] };
-      setMandates(json.mandates);
+      const next = await loadMandateRows(PROXY);
+      setMandates(next);
       setRefreshedAt(Date.now());
     } finally {
       setLoading(false);
