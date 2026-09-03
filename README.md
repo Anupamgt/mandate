@@ -2,92 +2,63 @@
 
 Bounded, revocable, audited spending authority for AI agents talking to Razorpay. **Test-mode only.** MIT.
 
-## Problem
+## The problem, shown
 
-An agent with a payment tool can spend until someone notices. Caps live in the prompt. Revocation is “please stop.” There is no signed record of what was allowed, what was denied, or why.
+Razorpay's MCP server hands an agent full merchant-key power; "top up our API credits" can also refund or pay out whatever the key allows, and today only the prompt stops it.
 
-Mandate puts those constraints **outside** the model: an operator-signed mandate, a deterministic `evaluate()`, reserve-then-settle, and a hash-chained audit log. The agent never holds Razorpay keys and never gets a `pay` tool.
+```bash
+curl -s http://127.0.0.1:18787/spend/propose -H "content-type: application/json" -d '{"agent_id":"agent_demo","tool":"create_order","counterparty_id":"prov_compute_a","amount_paise":20000,"purpose":"over cap"}'
+```
 
-## What it is
-
-A local governance proxy (`apps/proxy`) between an operator / agent and Razorpay **test mode**.
-
-- Operator issues or revokes an Ed25519-signed mandate (caps, window, tool + counterparty allowlists, step-up threshold), bound to one `agent_id`.
-- Every spend goes through `evaluate()` — a pure function, no I/O, no LLM, no `Date.now()`. Unknown tools fail closed.
-- On `ALLOW`, the proxy reserves, then pays on a rail (`MockRail` by default; `RazorpayTestRail` is `s2s_order` in test mode), then reconciles. Injected provisioning failure is reversed.
-- Every attempt — allow, step-up, or deny — is an append-only audit row in a hash chain.
-
-The **primary demo path** is the REST gate: the operator console calls `POST /spend/propose` (see [ARCHITECTURE.md](./ARCHITECTURE.md) §6). The same gate is also exposed to any MCP client — see [MCP proxy](#mcp-proxy).
-
-Amounts are integer **paise** everywhere. Display them as rupees.
+```json
+{
+  "decision": "DENY",
+  "reason_code": "PER_TXN_CAP_EXCEEDED",
+  "checks": [
+    "signature:pass",
+    "status:pass",
+    "window:pass",
+    "agent:pass",
+    "tool:pass",
+    "counterparty:pass",
+    "per_txn:exceeded"
+  ]
+}
+```
 
 ## Why Open Track
 
-Track 01 is an agent that *shops*; Mandate is the *authority layer* any spending agent — shopping, procurement, infra — plugs into, rail-agnostic and protocol-mapped (AP2 / x402 / UAP); the showcase domain is interchangeable.
+Track 01's bar — every money action explainable, bounded, gated, with an audit trail and one failure handled — is exactly what Mandate builds, and we adopted it as our acceptance criteria on purpose. But Track 01 scores an agent that grows merchant revenue or makes a merchant transactable. Mandate is the authority layer *underneath* such agents: any spending agent — shopping, procurement, infra — points at the proxy and inherits signed, revocable, audited limits. The showcase domain is interchangeable; the layer is the product.
 
-See [ARCHITECTURE.md](./ARCHITECTURE.md) §7 (protocol map) and §8 (Day-0 rail: `s2s_order`).
+## Two minutes
 
-## Quickstart
-
-Three commands. Node 20+, [pnpm](https://pnpm.io/) 11. Prisma reads `packages/db/.env`; copy both env files. PowerShell does not support `&&` — use the block below or run each line separately.
-
-**Windows PowerShell:**
-
-```powershell
-Copy-Item .env.example .env; Copy-Item packages/db/.env.example packages/db/.env
-# optional: fill RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET (rzp_test_ only)
-pnpm install
+```bash
+git clone https://github.com/Anupamgt/mandate.git
+cd mandate
+pnpm i
 pnpm dev
 ```
 
-**macOS / Linux:**
-
 ```bash
-cp .env.example .env && cp packages/db/.env.example packages/db/.env
-# optional: fill RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET (rzp_test_ only)
-pnpm install
-pnpm dev
+curl -s http://127.0.0.1:18787/spend/propose -H "content-type: application/json" -d '{"agent_id":"agent_demo","tool":"create_order","counterparty_id":"prov_compute_a","amount_paise":20000,"purpose":"over cap"}'
 ```
 
-`.env.example` already sets `MANDATE_RAIL=mock`, so the walkthrough runs **without** Razorpay keys. To hit Razorpay test mode later, fill `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` (`rzp_test_` only; never `rzp_live_`). Never commit `.env`.
-
-Then open [http://127.0.0.1:43123](http://127.0.0.1:43123).
-
-| Process | URL |
-|---|---|
-| Operator dashboard | http://127.0.0.1:43123 |
-| Proxy REST | http://127.0.0.1:18787 · `POST /spend/propose` |
-| Showcase 402 API | http://127.0.0.1:18788 |
-
-## Demo script
-
-Demo mandate (signed in the browser; private key never leaves the client): per-txn cap **10000 paise (₹100)**, cumulative **50000 paise (₹500)**, step-up above **8000 paise**, tools `create_order` / `update_refund`, counterparties `prov_compute_a` / `razorpay`.
-
-1. Click **Issue demo mandate**.
-2. **Propose spend** → Create order → chip **₹10 · should allow** (1000 paise) → `ALLOW`.
-3. Amount **20000** paise → `PER_TXN_CAP_EXCEEDED`.
-4. Tool **Create payout** (`create_payout`) → `TOOL_UNCLASSIFIED` (not on this test account; fail closed).
-5. **Revoke**, then propose 1000 paise again → `MANDATE_REVOKED`.
-
-Same gate from the shell after step 1 (agent is `agent_demo`):
-
 ```bash
-curl -s http://127.0.0.1:18787/spend/propose -H "content-type: application/json" -d '{"agent_id":"agent_demo","tool":"create_order","counterparty_id":"prov_compute_a","amount_paise":1000,"purpose":"ok"}'
-```
-
-Optional evidence (not part of the three-command start):
-
-```bash
-pnpm test
-pnpm batch
-pnpm redteam
 pnpm audit:verify packages/audit/fixtures/ok.json
-pnpm check
 ```
 
-`pnpm batch` rewrites `metrics.json` (`false_allows` must stay 0). `pnpm redteam` rewrites [REDTEAM.md](./REDTEAM.md) with an observed detail per RT-01…RT-10. `pnpm check` is lint + typecheck + test + batch + redteam; it does not run `pnpm mcp:smoke`. Walkthrough video: [docs/demo/VIDEO.md](./docs/demo/VIDEO.md) (URL filled in T-037).
+## What it is
 
-## Metrics
+A governance proxy (`apps/proxy`) between an operator / agent and Razorpay **test mode**. The 42 upstream tools and their classes live in [`apps/proxy/config/upstream-tools.json`](./apps/proxy/config/upstream-tools.json); a name missing from that dump is unclassified and fail-closed (`TOOL_UNCLASSIFIED`).
+
+- Operator issues or revokes an Ed25519-signed mandate (caps, window, tool + counterparty allowlists, step-up threshold), bound to one `agent_id`.
+- Every spend goes through `evaluate()` — a pure function, no I/O, no LLM, no `Date.now()`.
+- On `ALLOW`, the proxy reserves, then pays on a rail (`MockRail` by default; `RazorpayTestRail` is `s2s_order` in test mode), then reconciles. Injected provisioning failure is reversed.
+- Every attempt — allow, step-up, or deny — is an append-only audit row in a hash chain.
+
+The agent never holds Razorpay keys and never gets a `pay` tool. Amounts are integer **paise**. Field names follow AP2, the showcase speaks HTTP 402, and the mandate shape matches UAP — mapping, not a compliance claim: [ARCHITECTURE.md](./ARCHITECTURE.md) §7.
+
+## Twenty minutes
 
 From committed `metrics.json` after `pnpm batch` (50 seeded MockRail attempts).
 
@@ -109,18 +80,23 @@ From committed `metrics.json` after `pnpm batch` (50 seeded MockRail attempts).
 
 Latency is end-to-end decision time in the batch harness (including SQLite), not in-process `evaluate()` alone.
 
+[REDTEAM.md](./REDTEAM.md) — RT-01…RT-10 all **PASS** (jailbreak vs cap, proof replay, parallel cap, bad HMAC, revoke-before-pay, tampered mandate, window expiry, exact counterparty, unclassified tool, audit tamper).
+
+MCP denial: [docs/demo/mcp-denial-transcript.md](./docs/demo/mcp-denial-transcript.md) · `pnpm mcp:smoke`.
+
+[ARCHITECTURE.md](./ARCHITECTURE.md). Tags: `v0.0.1-docs`, `v0.1.0`, `v0.3.0`.
+
+## What broke
+
+**Concurrent proposals beat the cumulative cap.** Parallel `POST /spend/propose` calls could all pass `evaluate()` before any settlement landed, so the live total exceeded `max_total_paise`. The fix is reserve-then-settle in one SQLite transaction (`apps/proxy/src/spend.ts`): the cumulative check and `Reservation` insert share `prisma.$transaction`. RT-03 fires 10 parallel ₹100 proposals at a ₹500 cap (`max_total_paise = 50000`) and ≤ 5 settle.
+
+**The test account cannot create payouts** (`GET /v1/payouts` → 400). Day-0 fell back to `s2s_order` (order + test payment; reverse = refund). `create_payout` is not in the 42-tool dump, so it is unclassified and denied (`TOOL_UNCLASSIFIED`); the MCP `MONEY_OUT` demo therefore gates `update_refund`.
+
+**The MCP denial scene was nearly cut for demo reliability.** A live MCP client in a timed walkthrough is brittle. It was kept by committing `docs/demo/mcp-denial-transcript.md` and adding `pnpm mcp:smoke` to CI (`.github/workflows/check.yml`) so the denial is reproducible without a live client.
+
 ## Limitations
 
-**Placeholder — rewrite this section by hand before submission.** The bullets below are a factual floor, not a pitch.
-
-- **Test-mode only.** No live money. Keys must start with `rzp_test_`. Live keys (`rzp_live_`) are out of scope.
-- **No on-chain x402.** Showcase `HTTP 402` + proof verify uses Razorpay test mode or `MockRail`, not a blockchain settlement.
-- **Audit is tamper-evident, not tamper-proof.** `pnpm audit:verify` walks a local hash chain. Logs are not externally anchored and are not a legal proof.
-- Day-0 rail is Razorpay **s2s_order** (order + test payment; reverse = refund). This test account cannot create payouts (`GET /v1/payouts` → 400). `create_payout` is unclassified and denied.
-- MCP to `mcp.razorpay.com` is implemented but is **not** the primary demo path; the walkthrough uses REST `POST /spend/propose`.
-- Track (Open vs Track 01 Agentic Commerce) is **TBD** at submission. Do not read protocol names in [ARCHITECTURE.md](./ARCHITECTURE.md) §7 as claims of AP2 / x402 / UAP compliance.
-
-See [ARCHITECTURE.md](./ARCHITECTURE.md) (non-goals §2, Day-0 §8) and [SECURITY.md](./SECURITY.md).
+<!-- human: T-041 -->
 
 ## Layout
 
@@ -136,14 +112,23 @@ packages/rails          MockRail + RazorpayTestRail (s2s_order)
 packages/shared         reason codes, events, Paise
 ```
 
-`PRD.md` and `DEV-PROCESS.md` win when present. Do not edit them; align code to them.
+`PRD.md` and `DEV-PROCESS.md` win when present. Do not edit them; align code to them. See [SECURITY.md](./SECURITY.md) and [ARCHITECTURE.md](./ARCHITECTURE.md).
 
-### MCP proxy
+## Demo script
 
-The REST gate above is the scripted walkthrough. The MCP proxy is the same `evaluate()` gate exposed to any MCP client (`stdio` via `pnpm dev:mcp`, or `POST /mcp`).
+Demo mandate (signed in the browser; private key never leaves the client): per-txn cap **10000 paise (₹100)**, cumulative **50000 paise (₹500)**, step-up above **8000 paise**, tools `create_order` / `update_refund`, counterparties `prov_compute_a` / `razorpay`.
 
-- Committed denial transcript: [docs/demo/mcp-denial-transcript.md](./docs/demo/mcp-denial-transcript.md)
-- Reproduce non-interactively: `pnpm mcp:smoke` (needs a Prisma SQLite DB; not part of `pnpm check`)
+1. Click **Issue demo mandate**.
+2. **Propose spend** → Create order → chip **₹10 · should allow** (1000 paise) → `ALLOW`.
+3. Amount **20000** paise → `PER_TXN_CAP_EXCEEDED`.
+4. Tool **Create payout** (`create_payout`) → `TOOL_UNCLASSIFIED` (not on this test account; fail closed).
+5. **Revoke**, then propose 1000 paise again → `MANDATE_REVOKED`.
+
+Walkthrough video: [docs/demo/VIDEO.md](./docs/demo/VIDEO.md).
+
+## MCP proxy
+
+REST is the scripted walkthrough (`POST /spend/propose`). MCP is the same gate for any MCP client (`stdio` via `pnpm dev:mcp`, or `POST /mcp`). Transcript: [docs/demo/mcp-denial-transcript.md](./docs/demo/mcp-denial-transcript.md). Reproduce non-interactively: `pnpm mcp:smoke` (needs a Prisma SQLite DB; not part of `pnpm check`).
 
 Stdio (Cursor / Claude Desktop), after `pnpm install`:
 

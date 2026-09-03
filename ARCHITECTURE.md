@@ -184,6 +184,16 @@ Evidence (`apps/proxy/config/day0-probe.json`):
 
 MCP money-out surface is only `update_refund`. There is no payout-create tool, which matches the REST 400. Unclassified names still fail closed (`TOOL_UNCLASSIFIED`). Full dump + class: `apps/proxy/config/upstream-tools.json`.
 
+Copy `.env.example` → `.env` and `packages/db/.env.example` → `packages/db/.env`. Default `MANDATE_RAIL=mock` (no Razorpay keys). Windows PowerShell does not support `&&`. After `pnpm dev`:
+
+| Process | URL |
+|---|---|
+| Operator dashboard | http://127.0.0.1:43123 |
+| Proxy REST | http://127.0.0.1:18787 · `POST /spend/propose` |
+| Showcase 402 API | http://127.0.0.1:18788 |
+
+`pnpm check` = lint + typecheck + test + batch + redteam. It does not run `pnpm mcp:smoke` (separate CI job in `.github/workflows/check.yml`).
+
 ## 9. Security
 
 Razorpay keys: proxy env only. Operator private key: operator client only; proxy holds public key. Proofs bound to `invoice_id + resource + expires_at`, single-use. Provisioning webhooks HMAC-SHA256. Free-text from 402 terms parsed into typed structs, truncated to 256 chars; policy never reads free text. Fail closed on unknowns.
@@ -335,3 +345,4 @@ P0 = submission fails without it. P1 = materially raises odds. P2 = ship if time
 | 2026-09-01 | Initial public architecture. Rail/MCP Day-0 blocked on keys. Track TBD at v0.3.0. |
 | 2026-09-01 | `v0.3.0`: evaluate() + Ed25519 mandates + hash-chain audit + MockRail/S2S rail + REST gate + MCP stdio/HTTP proxy + batch/red-team + operator console. Track still TBD. |
 | 2026-09-04 | Open Track (Track 05). FR-83 README refresh. Day-0 rail remains `s2s_order`; protocol map §7 unchanged. |
+| 2026-09-04 | FR-84 README in submission order. Local-run ports, env copy, and `pnpm check` composition moved here from README. |

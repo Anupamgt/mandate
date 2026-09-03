@@ -1,0 +1,5 @@
+**Concurrent proposals beat the cumulative cap.** Parallel `POST /spend/propose` calls could all pass `evaluate()` before any settlement landed, so the live total exceeded `max_total_paise`. The fix is reserve-then-settle in one SQLite transaction (`apps/proxy/src/spend.ts`): the cumulative check and `Reservation` insert share `prisma.$transaction`. RT-03 fires 10 parallel ₹100 proposals at a ₹500 cap (`max_total_paise = 50000`) and ≤ 5 settle.
+
+**The test account cannot create payouts** (`GET /v1/payouts` → 400). Day-0 fell back to `s2s_order` (order + test payment; reverse = refund). `create_payout` is not in the 42-tool dump, so it is unclassified and denied (`TOOL_UNCLASSIFIED`); the MCP `MONEY_OUT` demo therefore gates `update_refund`.
+
+**The MCP denial scene was nearly cut for demo reliability.** A live MCP client in a timed walkthrough is brittle. It was kept by committing `docs/demo/mcp-denial-transcript.md` and adding `pnpm mcp:smoke` to CI (`.github/workflows/check.yml`) so the denial is reproducible without a live client.
