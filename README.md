@@ -17,9 +17,15 @@ A local governance proxy (`apps/proxy`) between an operator / agent and Razorpay
 - On `ALLOW`, the proxy reserves, then pays on a rail (`MockRail` by default; `RazorpayTestRail` is `s2s_order` in test mode), then reconciles. Injected provisioning failure is reversed.
 - Every attempt — allow, step-up, or deny — is an append-only audit row in a hash chain.
 
-The **primary demo path** is the REST gate: the operator console calls `POST /spend/propose` (see [ARCHITECTURE.md](./ARCHITECTURE.md) §6). The proxy can also speak MCP (`stdio` and `POST /mcp`); that is not required for the walkthrough below.
+The **primary demo path** is the REST gate: the operator console calls `POST /spend/propose` (see [ARCHITECTURE.md](./ARCHITECTURE.md) §6). The same gate is also exposed to any MCP client — see [MCP proxy](#mcp-proxy).
 
 Amounts are integer **paise** everywhere. Display them as rupees.
+
+## Why Open Track
+
+Track 01 is an agent that *shops*; Mandate is the *authority layer* any spending agent — shopping, procurement, infra — plugs into, rail-agnostic and protocol-mapped (AP2 / x402 / UAP); the showcase domain is interchangeable.
+
+See [ARCHITECTURE.md](./ARCHITECTURE.md) §7 (protocol map) and §8 (Day-0 rail: `s2s_order`).
 
 ## Quickstart
 
@@ -76,9 +82,10 @@ pnpm test
 pnpm batch
 pnpm redteam
 pnpm audit:verify packages/audit/fixtures/ok.json
+pnpm check
 ```
 
-`pnpm batch` rewrites `metrics.json` (`false_allows` must stay 0). `pnpm redteam` rewrites `REDTEAM.md`.
+`pnpm batch` rewrites `metrics.json` (`false_allows` must stay 0). `pnpm redteam` rewrites [REDTEAM.md](./REDTEAM.md) with an observed detail per RT-01…RT-10. `pnpm check` is lint + typecheck + test + batch + redteam; it does not run `pnpm mcp:smoke`. Walkthrough video: [docs/demo/VIDEO.md](./docs/demo/VIDEO.md) (URL filled in T-037).
 
 ## Metrics
 
@@ -88,18 +95,17 @@ From committed `metrics.json` after `pnpm batch` (50 seeded MockRail attempts).
 |---|---|
 | total | 50 |
 | allowed | 15 |
+| denied_by_reason | CUM_CAP_EXCEEDED 4 · PER_TXN_CAP_EXCEEDED 8 · COUNTERPARTY_NOT_ALLOWED 6 · TOOL_UNCLASSIFIED 5 · TOOL_NOT_ALLOWED 3 · WINDOW_EXPIRED 4 |
 | step_ups | 5 |
 | false_allows | **0** |
 | false_denies | 0 |
 | exceptions_raised | 3 |
 | exceptions_resolved | 3 |
-| paise_withheld | 220000 (₹2,200) |
-| paise_reversed | 3000 (₹30) |
+| paise_withheld | 182000 |
+| paise_reversed | 3000 |
 | residual_paise | 0 |
-| decision_latency_p50_ms | 18 |
-| decision_latency_p99_ms | 49 |
-
-Denied by reason: `PER_TXN_CAP_EXCEEDED` 10 · `COUNTERPARTY_NOT_ALLOWED` 8 · `TOOL_UNCLASSIFIED` 5 · `TOOL_NOT_ALLOWED` 3 · `WINDOW_EXPIRED` 4.
+| decision_latency_p50_ms | 76.56369999999879 |
+| decision_latency_p99_ms | 449.8716999999997 |
 
 Latency is end-to-end decision time in the batch harness (including SQLite), not in-process `evaluate()` alone.
 
@@ -132,7 +138,12 @@ packages/shared         reason codes, events, Paise
 
 `PRD.md` and `DEV-PROCESS.md` win when present. Do not edit them; align code to them.
 
-### Optional: MCP
+### MCP proxy
+
+The REST gate above is the scripted walkthrough. The MCP proxy is the same `evaluate()` gate exposed to any MCP client (`stdio` via `pnpm dev:mcp`, or `POST /mcp`).
+
+- Committed denial transcript: [docs/demo/mcp-denial-transcript.md](./docs/demo/mcp-denial-transcript.md)
+- Reproduce non-interactively: `pnpm mcp:smoke` (needs a Prisma SQLite DB; not part of `pnpm check`)
 
 Stdio (Cursor / Claude Desktop), after `pnpm install`:
 

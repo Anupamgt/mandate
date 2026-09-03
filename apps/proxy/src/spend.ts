@@ -8,6 +8,8 @@ import type { Rail } from "@mandate/rails";
 import type { EventType } from "@mandate/shared";
 import { classifyTool, extractAmountPaise, extractCounterparty, type ClassifiedTool } from "./classify.js";
 
+export type AfterReserveHookCtx = { mandateId: string; spendRequestId: string };
+
 export type ProxyDeps = {
   prisma: PrismaClient;
   rail: Rail;
@@ -19,7 +21,18 @@ export type ProxyDeps = {
   provisionTimeoutMs: number;
   waitForProvision?: (invoiceId: string) => Promise<boolean>;
   rateLimitPerMinute?: number;
+  /** Invoked only when `MANDATE_TEST_HOOKS=1`. Unreachable in prod (env unset, no callback). */
+  afterReserveHook?: (ctx: AfterReserveHookCtx) => Promise<void>;
 };
+
+/** RT-05 test seam: revoke between reserve and pay. No-op unless `MANDATE_TEST_HOOKS=1`. */
+export async function runAfterReserveHook(
+  hook: ((ctx: AfterReserveHookCtx) => Promise<void>) | undefined,
+  ctx: AfterReserveHookCtx,
+): Promise<void> {
+  if (process.env.MANDATE_TEST_HOOKS !== "1") return;
+  if (typeof hook === "function") await hook(ctx);
+}
 
 const auditChain: { tail: Promise<unknown> } = { tail: Promise.resolve() };
 
@@ -406,6 +419,46 @@ async function proposeSpendInner(deps: ProxyDeps, input: ProposeInput) {
   });
 }
 
+async function refusePayIfMandateUnusable(
+  deps: ProxyDeps,
+  args: {
+    spendId: string;
+    mandateRow: { id: string; bodyJson: string };
+    rationale: string;
+  },
+) {
+  const fresh = await deps.prisma.mandate.findUniqueOrThrow({ where: { id: args.mandateRow.id } });
+  const body = parseMandateBody(JSON.parse(fresh.bodyJson));
+  const sigOk = await verifyMandateBody(body, fresh.signature, deps.operatorPublicKeyHex);
+  const code =
+    !sigOk
+      ? "MANDATE_SIG_INVALID"
+      : fresh.status === "REVOKED"
+        ? "MANDATE_REVOKED"
+        : fresh.status === "EXPIRED"
+          ? "MANDATE_EXPIRED"
+          : undefined;
+  if (!code) return null;
+
+  await deps.prisma.reservation.update({
+    where: { spendRequestId: args.spendId },
+    data: { releasedAt: deps.now() },
+  });
+  await deps.prisma.spendRequest.update({ where: { id: args.spendId }, data: { status: "DENY" } });
+  await deps.prisma.decision.update({
+    where: { spendRequestId: args.spendId },
+    data: { decision: "DENY", reasonCode: code, checksJson: JSON.stringify(["settle:mandate"]) },
+  });
+  return {
+    spend_request_id: args.spendId,
+    rationale: args.rationale,
+    decision: "DENY" as const,
+    reason_code: code,
+    checks: ["settle:mandate"],
+    proof: null,
+  };
+}
+
 async function reserveThenPay(
   deps: ProxyDeps,
   args: {
@@ -490,6 +543,14 @@ async function reserveThenPay(
     payload: { amountPaise: args.amountPaise },
     ts: deps.now(),
   });
+
+  await runAfterReserveHook(deps.afterReserveHook, {
+    mandateId: args.mandateRow.id,
+    spendRequestId: args.spendId,
+  });
+
+  const postReserveRefuse = await refusePayIfMandateUnusable(deps, args);
+  if (postReserveRefuse) return postReserveRefuse;
 
   const quote = await deps.rail.quote(asPaise(args.amountPaise), args.counterpartyId);
   const settlement = await deps.rail.pay(quote, args.mandateRow.id, args.invoiceId);

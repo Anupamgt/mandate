@@ -18,6 +18,7 @@
     "dev:resource": "pnpm --filter @mandate/resource-server dev",
     "dev:web": "pnpm --filter @mandate/web dev",
     "dev:mcp": "pnpm --filter @mandate/proxy mcp",
+    "mcp:smoke": "tsx scripts/mcp-smoke.ts",
     "batch": "tsx apps/agent/src/batch.ts",
     "redteam": "tsx apps/agent/src/redteam.ts",
     "audit:verify": "tsx packages/audit/src/cli/verify.ts",

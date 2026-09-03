@@ -5,7 +5,7 @@
 | Status | Value |
 |---|---|
 | Tag | `v0.3.0` |
-| Track | **TBD at `v0.3.0`** (Open Track vs Track 01 Agentic Commerce) |
+| Track | **Open Track (Track 05)** |
 | Day-0 rail (FR-31) | **`s2s_order`** — see §8 |
 | Day-0 MCP dump (FR-20) | **Confirmed** — `https://mcp.razorpay.com/mcp`, 42 tools in `apps/proxy/config/upstream-tools.json` |
 
@@ -334,3 +334,4 @@ P0 = submission fails without it. P1 = materially raises odds. P2 = ship if time
 |---|---|
 | 2026-09-01 | Initial public architecture. Rail/MCP Day-0 blocked on keys. Track TBD at v0.3.0. |
 | 2026-09-01 | `v0.3.0`: evaluate() + Ed25519 mandates + hash-chain audit + MockRail/S2S rail + REST gate + MCP stdio/HTTP proxy + batch/red-team + operator console. Track still TBD. |
+| 2026-09-04 | Open Track (Track 05). FR-83 README refresh. Day-0 rail remains `s2s_order`; protocol map §7 unchanged. |

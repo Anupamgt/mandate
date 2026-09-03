@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
-import { describe, expect, it } from "vitest";
-import { signMandateBody, parseMandateBody } from "@mandate/mandate";
+import { afterEach, describe, expect, it } from "vitest";
+import { signMandateBody, signRevocation, parseMandateBody } from "@mandate/mandate";
 import { verifyChain, type AuditRecord } from "@mandate/audit";
 import { makeTestProxy } from "./harness.js";
 
@@ -29,6 +29,12 @@ async function issue(app: Awaited<ReturnType<typeof makeTestProxy>>["app"], keys
 }
 
 describe("FR-82 red team", () => {
+  const hooksPrev = process.env.MANDATE_TEST_HOOKS;
+  afterEach(() => {
+    if (hooksPrev === undefined) delete process.env.MANDATE_TEST_HOOKS;
+    else process.env.MANDATE_TEST_HOOKS = hooksPrev;
+  });
+
   it("RT-01 jailbreak terms do not raise the cap", async () => {
     const { app, keys } = await makeTestProxy();
     await issue(app, keys, { max_per_txn_paise: 1000 });
@@ -89,6 +95,156 @@ describe("FR-82 red team", () => {
       body: raw,
     });
     expect(res.status).toBe(401);
+  });
+
+  it("RT-05 revoke between ALLOW/reserve and pay refuses settlement", async () => {
+    process.env.MANDATE_TEST_HOOKS = "1";
+    const { app, keys, deps } = await makeTestProxy();
+    await issue(app, keys);
+    deps.afterReserveHook = async ({ mandateId }) => {
+      const revokedAt = "2026-09-02T12:00:00.000Z";
+      const revSig = await signRevocation(
+        { mandate_id: mandateId, reason: "rt-05", revoked_at: revokedAt },
+        keys.privateKeyHex,
+      );
+      const rev = await app.request(`/mandates/${mandateId}/revoke`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ reason: "rt-05", signature: revSig, revoked_at: revokedAt }),
+      });
+      expect(rev.status).toBe(200);
+    };
+    const res = await app.request("/spend/propose", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        agent_id: "agent_demo",
+        tool: "create_order",
+        counterparty_id: "prov_compute_a",
+        amount_paise: 1000,
+        purpose: "p",
+        resource: "compute/run",
+      }),
+    });
+    const json = (await res.json()) as { reason_code: string; proof: unknown };
+    expect(json.reason_code).toBe("MANDATE_REVOKED");
+    expect(json.proof).toBeNull();
+    expect(await deps.prisma.settlement.count()).toBe(0);
+    const audit = (await (await app.request("/audit")).json()) as {
+      rows: { eventType: string }[];
+    };
+    expect(audit.rows.some((r) => r.eventType === "MANDATE_REVOKED")).toBe(true);
+  });
+
+  it("RT-05 hook is unreachable without MANDATE_TEST_HOOKS", async () => {
+    delete process.env.MANDATE_TEST_HOOKS;
+    const { app, keys, deps } = await makeTestProxy();
+    await issue(app, keys);
+    let called = false;
+    deps.afterReserveHook = async () => {
+      called = true;
+      throw new Error("hook must not run");
+    };
+    const res = await app.request("/spend/propose", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        agent_id: "agent_demo",
+        tool: "create_order",
+        counterparty_id: "prov_compute_a",
+        amount_paise: 1000,
+        purpose: "p",
+        resource: "compute/run",
+      }),
+    });
+    const json = (await res.json()) as { reason_code: string };
+    expect(called).toBe(false);
+    expect(json.reason_code).toBe("ALLOW");
+    expect(await deps.prisma.settlement.count()).toBe(1);
+  });
+
+  it("RT-06 tampered stored max_total_paise is MANDATE_SIG_INVALID", async () => {
+    const { app, keys, deps } = await makeTestProxy();
+    const { id } = await issue(app, keys);
+    const fetched = await app.request(`/mandates/${id}`);
+    const got = (await fetched.json()) as { body: { max_total_paise: number } };
+    expect(got.body.max_total_paise).toBe(50_000);
+    const row = await deps.prisma.mandate.findUniqueOrThrow({ where: { id } });
+    const marker = '"max_total_paise":';
+    const at = row.bodyJson.indexOf(marker);
+    expect(at).toBeGreaterThanOrEqual(0);
+    let i = at + marker.length;
+    while (i < row.bodyJson.length && (row.bodyJson[i] === " " || row.bodyJson[i] === "\t")) i += 1;
+    const buf = Buffer.from(row.bodyJson, "utf8");
+    buf[i] = buf[i]! ^ 1;
+    await deps.prisma.mandate.update({ where: { id }, data: { bodyJson: buf.toString("utf8") } });
+    const res = await app.request("/spend/propose", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        agent_id: "agent_demo",
+        tool: "create_order",
+        counterparty_id: "prov_compute_a",
+        amount_paise: 1000,
+        purpose: "p",
+      }),
+    });
+    const json = (await res.json()) as { reason_code: string };
+    expect(json.reason_code).toBe("MANDATE_SIG_INVALID");
+  });
+
+  it("RT-07 window passes at valid_until-1s and expires at +1s", async () => {
+    const until = "2026-09-02T12:00:00.000Z";
+    const { app, keys, deps } = await makeTestProxy();
+    await issue(app, keys, { valid_until: until });
+    deps.now = () => new Date("2026-09-02T11:59:59.000Z");
+    const inside = await app.request("/spend/propose", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        agent_id: "agent_demo",
+        tool: "create_order",
+        counterparty_id: "prov_compute_a",
+        amount_paise: 1000,
+        purpose: "inside",
+        invoice_id: "rt07_inside",
+      }),
+    });
+    const insideJson = (await inside.json()) as { reason_code: string };
+    expect(insideJson.reason_code).toBe("ALLOW");
+    deps.now = () => new Date("2026-09-02T12:00:01.000Z");
+    const expired = await app.request("/spend/propose", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        agent_id: "agent_demo",
+        tool: "create_order",
+        counterparty_id: "prov_compute_a",
+        amount_paise: 1000,
+        purpose: "expired",
+        invoice_id: "rt07_expired",
+      }),
+    });
+    const expiredJson = (await expired.json()) as { reason_code: string };
+    expect(expiredJson.reason_code).toBe("WINDOW_EXPIRED");
+  });
+
+  it("RT-08 counterparty prefix is not an allowlist match", async () => {
+    const { app, keys } = await makeTestProxy();
+    await issue(app, keys, { allowed_counterparties: ["prov_compute_a"] });
+    const res = await app.request("/spend/propose", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        agent_id: "agent_demo",
+        tool: "create_order",
+        counterparty_id: "prov_compute_a1",
+        amount_paise: 1000,
+        purpose: "p",
+      }),
+    });
+    const json = (await res.json()) as { reason_code: string };
+    expect(json.reason_code).toBe("COUNTERPARTY_NOT_ALLOWED");
   });
 
   it("RT-09 unclassified tool", async () => {

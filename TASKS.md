@@ -34,10 +34,13 @@ Ordered by the release plan. One Cursor Agent session per line. Do not start P2 
 
 ## Tags
 
-| Tag | Gate |
-|---|---|
-| `v0.0.1-docs` | Public spec |
-| `v0.1.0` | Scaffold + Day-0 rail/MCP dump |
-| `v0.3.0` | MCP proxy + REST gate + batch `false_allows = 0` |
+| Tag | Status | Gate |
+|---|---|---|
+| `v0.0.1-docs` | pushed | This file set on `main` |
+| `v0.1.0` | pushed | T-001–T-003 green **and** T-004/T-005 written (or explicitly blocked in ARCHITECTURE) |
+| `v0.2.0` | skipped | Policy, audit, mandate, rails, resource server; one real test-mode settlement. Skipped because deterministic core and MCP landed in the same push. |
+| `v0.3.0` | pushed | MCP proxy or REST-gate fallback; batch `false_allows = 0`; **reopen track choice** |
+| `v0.4.0` | pending | NL authoring, red-team, dashboard P1 |
+| `v1.0.0` | pending | README quickstart, video, fresh-clone test |
 
-Track choice (Open vs Track 01) remains **TBD** until the submission form is filled.
+**Open Track (Track 05).** Track 01 is an agent that *shops*; Mandate is the *authority layer* any spending agent — shopping, procurement, infra — plugs into, rail-agnostic and protocol-mapped (AP2 / x402 / UAP); the showcase domain is interchangeable.
