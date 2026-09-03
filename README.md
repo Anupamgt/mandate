@@ -92,18 +92,17 @@ From committed `metrics.json` after `pnpm batch` (50 seeded MockRail attempts).
 |---|---|
 | total | 50 |
 | allowed | 15 |
+| denied_by_reason | CUM_CAP_EXCEEDED 4 · PER_TXN_CAP_EXCEEDED 8 · COUNTERPARTY_NOT_ALLOWED 6 · TOOL_UNCLASSIFIED 5 · TOOL_NOT_ALLOWED 3 · WINDOW_EXPIRED 4 |
 | step_ups | 5 |
 | false_allows | **0** |
 | false_denies | 0 |
 | exceptions_raised | 3 |
 | exceptions_resolved | 3 |
-| paise_withheld | 220000 (₹2,200) |
-| paise_reversed | 3000 (₹30) |
+| paise_withheld | 182000 |
+| paise_reversed | 3000 |
 | residual_paise | 0 |
-| decision_latency_p50_ms | 18 |
-| decision_latency_p99_ms | 49 |
-
-Denied by reason: `PER_TXN_CAP_EXCEEDED` 10 · `COUNTERPARTY_NOT_ALLOWED` 8 · `TOOL_UNCLASSIFIED` 5 · `TOOL_NOT_ALLOWED` 3 · `WINDOW_EXPIRED` 4.
+| decision_latency_p50_ms | 76.56369999999879 |
+| decision_latency_p99_ms | 449.8716999999997 |
 
 Latency is end-to-end decision time in the batch harness (including SQLite), not in-process `evaluate()` alone.
 
