@@ -96,7 +96,17 @@ MCP denial: [docs/demo/mcp-denial-transcript.md](./docs/demo/mcp-denial-transcri
 
 ## Limitations
 
-<!-- human: T-041 -->
+Read this before the metrics. Everything below is a deliberate scope cut, and each one is a real gap.
+
+- **Test mode only.** Every rupee here is a Razorpay test-mode rupee. Keys must be `rzp_test_`; `rzp_live_` is out of scope and untested. Nothing in the policy or audit path knows which mode it is in, but we have not proven that with live money.
+- **Payouts are not demonstrated.** This test account cannot create payouts (`GET /v1/payouts` returns 400), so the Day-0 rail is `s2s_order` and the reverse path is a refund. `create_payout` is unclassified and therefore denied. The `MONEY_OUT` tool gated in the MCP transcript is `update_refund`. The gate is the same; the tool is not the one we'd choose to show.
+- **Mandates are signed JSON, not verifiable credentials.** Ed25519 over canonical JSON, field names aligned with AP2's Intent Mandate. That is not W3C VC compliance, and none of the protocol names in ARCHITECTURE.md §7 are compliance claims — they are a mapping of our components onto theirs.
+- **One operator key.** A single principal signs every mandate and every step-up approval. There are no delegation chains, no multi-party approval, and no key rotation. Compromise that key and the gate is still deterministic, but it is enforcing an attacker's mandate.
+- **The audit log is tamper-evident, not tamper-proof.** `pnpm audit:verify` walks a local SHA-256 hash chain and finds the first edited row. The chain head is not anchored anywhere external, so an attacker with write access to the database and the code can rewrite history consistently. It is evidence, not proof.
+- **No dispute or chargeback flow.** Reconciliation covers "paid but not provisioned" and reverses it. A counterparty who disputes a settlement has no path through this system.
+- **x402 is an interface, not a rail.** The `Rail` abstraction has a `MockRail` for tests; there is no on-chain settlement and we have not run against a real x402 facilitator.
+- **Natural-language drafting is a convenience, not a control.** The model drafts a mandate; the operator reads the plain-English readback and signs. If the operator signs without reading, the model's interpretation becomes the authority. Nothing in the policy engine reads free text.
+- **Single process, single SQLite file.** Reserve-then-settle holds under concurrent proposals within one process (RT-03). We have not tested it across multiple proxy instances.
 
 ## Layout
 
