@@ -21,6 +21,10 @@ The **primary demo path** is the REST gate: the operator console calls `POST /sp
 
 Amounts are integer **paise** everywhere. Display them as rupees.
 
+## Why Open Track
+
+Track 01 is an agent that *shops*; Mandate is the *authority layer* any spending agent — shopping, procurement, infra — plugs into, rail-agnostic and protocol-mapped (AP2 / x402 / UAP); the showcase domain is interchangeable.
+
 ## Quickstart
 
 Three commands. Node 20+, [pnpm](https://pnpm.io/) 11. Prisma reads `packages/db/.env`; copy both env files. PowerShell does not support `&&` — use the block below or run each line separately.
