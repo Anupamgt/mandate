@@ -1,7 +1,13 @@
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { generateOperatorKeyPair, parseMandateBody, signMandateBody } from "@mandate/mandate";
+import { parseMandateBody, signMandateBody } from "@mandate/mandate";
 import { makeTestProxy } from "../../proxy/src/harness.js";
+import {
+  BATCH_TOTAL,
+  CUM_CAP_AGENT,
+  CUM_CAP_MAX_TOTAL_PAISE,
+  batchAttempt,
+} from "./batch-seed.js";
 
 type Metrics = {
   total: number;
@@ -18,16 +24,6 @@ type Metrics = {
   decision_latency_p50_ms: number;
   decision_latency_p99_ms: number;
 };
-
-function expectedReason(i: number): string {
-  if (i < 5) return "STEP_UP_THRESHOLD";
-  if (i < 20) return "ALLOW";
-  if (i < 30) return "PER_TXN_CAP_EXCEEDED";
-  if (i < 38) return "COUNTERPARTY_NOT_ALLOWED";
-  if (i < 43) return "TOOL_UNCLASSIFIED";
-  if (i < 46) return "TOOL_NOT_ALLOWED";
-  return "WINDOW_EXPIRED";
-}
 
 export async function runBatch(outPath = resolve("metrics.json")): Promise<Metrics> {
   const { app, keys, deps } = await makeTestProxy({ rateLimitPerMinute: 10_000 });
@@ -66,35 +62,33 @@ export async function runBatch(outPath = resolve("metrics.json")): Promise<Metri
 
   await mk({});
   await mk({}, "agent_other");
+  await mk(
+    {
+      max_total_paise: CUM_CAP_MAX_TOTAL_PAISE,
+      max_per_txn_paise: 5000,
+      step_up_above_paise: 4000,
+    },
+    CUM_CAP_AGENT,
+  );
 
-  for (let i = 0; i < 50; i += 1) {
-    const expectCode = expectedReason(i);
-    let amount = 1000;
-    let counterparty = "prov_compute_a";
-    let tool = "create_order";
-    const agent = "agent_demo";
-    let failProvision = false;
-    if (expectCode === "PER_TXN_CAP_EXCEEDED") amount = 20_000;
-    if (expectCode === "COUNTERPARTY_NOT_ALLOWED") counterparty = "prov_compute_a1";
-    if (expectCode === "STEP_UP_THRESHOLD") amount = 4500;
-    if (expectCode === "TOOL_UNCLASSIFIED") tool = "create_payout";
-    if (expectCode === "TOOL_NOT_ALLOWED") tool = "fetch_all_orders";
-    if (expectCode === "WINDOW_EXPIRED") {
+  for (let i = 0; i < BATCH_TOTAL; i += 1) {
+    const attempt = batchAttempt(i);
+    const expectCode = attempt.expect;
+    if (attempt.freezeNowExpired) {
       deps.now = () => new Date("2026-09-20T00:00:00.000Z");
     }
-    if (i >= 17 && i < 20) failProvision = true;
 
     const t0 = performance.now();
     const res = await app.request("/spend/propose", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        agent_id: agent,
-        tool,
-        counterparty_id: counterparty,
-        amount_paise: amount,
+        agent_id: attempt.agent,
+        tool: attempt.tool,
+        counterparty_id: attempt.counterparty,
+        amount_paise: attempt.amountPaise,
         purpose: `batch-${i}`,
-        fail_provision: failProvision,
+        fail_provision: attempt.failProvision,
       }),
     });
     latencies.push(performance.now() - t0);
@@ -108,20 +102,20 @@ export async function runBatch(outPath = resolve("metrics.json")): Promise<Metri
       false_denies += 1;
     }
     if (json.reason_code !== "ALLOW" && json.reason_code !== "STEP_UP_THRESHOLD") {
-      paise_withheld += amount;
+      paise_withheld += attempt.amountPaise;
     }
     if (json.exception) {
       exceptions_raised += 1;
       if (json.exception === "EXCEPTION") {
         exceptions_resolved += 1;
-        paise_reversed += amount;
+        paise_reversed += attempt.amountPaise;
       }
     }
   }
 
   latencies.sort((a, b) => a - b);
   const metrics: Metrics = {
-    total: 50,
+    total: BATCH_TOTAL,
     allowed,
     denied_by_reason,
     step_ups,
@@ -144,6 +138,10 @@ if (isMain) {
   const m = await runBatch();
   if (m.false_allows !== 0) {
     console.error("false_allows must be 0", m);
+    process.exit(1);
+  }
+  if ((m.denied_by_reason.CUM_CAP_EXCEEDED ?? 0) < 4) {
+    console.error("CUM_CAP_EXCEEDED must be ≥ 4", m);
     process.exit(1);
   }
   console.log(JSON.stringify(m, null, 2));
