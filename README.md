@@ -17,7 +17,7 @@ A local governance proxy (`apps/proxy`) between an operator / agent and Razorpay
 - On `ALLOW`, the proxy reserves, then pays on a rail (`MockRail` by default; `RazorpayTestRail` is `s2s_order` in test mode), then reconciles. Injected provisioning failure is reversed.
 - Every attempt — allow, step-up, or deny — is an append-only audit row in a hash chain.
 
-The **primary demo path** is the REST gate: the operator console calls `POST /spend/propose` (see [ARCHITECTURE.md](./ARCHITECTURE.md) §6). The proxy can also speak MCP (`stdio` and `POST /mcp`); that is not required for the walkthrough below.
+The **primary demo path** is the REST gate: the operator console calls `POST /spend/propose` (see [ARCHITECTURE.md](./ARCHITECTURE.md) §6). The same gate is also exposed to any MCP client — see [MCP proxy](#mcp-proxy).
 
 Amounts are integer **paise** everywhere. Display them as rupees.
 
@@ -132,7 +132,12 @@ packages/shared         reason codes, events, Paise
 
 `PRD.md` and `DEV-PROCESS.md` win when present. Do not edit them; align code to them.
 
-### Optional: MCP
+### MCP proxy
+
+The REST gate above is the scripted walkthrough. The MCP proxy is the same `evaluate()` gate exposed to any MCP client (`stdio` via `pnpm dev:mcp`, or `POST /mcp`).
+
+- Committed denial transcript: [docs/demo/mcp-denial-transcript.md](./docs/demo/mcp-denial-transcript.md)
+- Reproduce non-interactively: `pnpm mcp:smoke` (needs a Prisma SQLite DB; not part of `pnpm check`)
 
 Stdio (Cursor / Claude Desktop), after `pnpm install`:
 
