@@ -25,6 +25,8 @@ Amounts are integer **paise** everywhere. Display them as rupees.
 
 Track 01 is an agent that *shops*; Mandate is the *authority layer* any spending agent — shopping, procurement, infra — plugs into, rail-agnostic and protocol-mapped (AP2 / x402 / UAP); the showcase domain is interchangeable.
 
+See [ARCHITECTURE.md](./ARCHITECTURE.md) §7 (protocol map) and §8 (Day-0 rail: `s2s_order`).
+
 ## Quickstart
 
 Three commands. Node 20+, [pnpm](https://pnpm.io/) 11. Prisma reads `packages/db/.env`; copy both env files. PowerShell does not support `&&` — use the block below or run each line separately.
@@ -80,9 +82,10 @@ pnpm test
 pnpm batch
 pnpm redteam
 pnpm audit:verify packages/audit/fixtures/ok.json
+pnpm check
 ```
 
-`pnpm batch` rewrites `metrics.json` (`false_allows` must stay 0). `pnpm redteam` rewrites `REDTEAM.md`.
+`pnpm batch` rewrites `metrics.json` (`false_allows` must stay 0). `pnpm redteam` rewrites [REDTEAM.md](./REDTEAM.md) with an observed detail per RT-01…RT-10. `pnpm check` is lint + typecheck + test + batch + redteam; it does not run `pnpm mcp:smoke`. Walkthrough video: [docs/demo/VIDEO.md](./docs/demo/VIDEO.md) (URL filled in T-037).
 
 ## Metrics
 
