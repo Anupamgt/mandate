@@ -19,7 +19,7 @@ export type MandateDraft = {
 const OPEN_PAY = /\bpay\s+(anyone|anybody|everyone|everybody)\b|\bany\s+counterparty\b/i;
 const UNLIMITED = /\bno\s+limit\b|\bunlimited\b|\bno\s+cap\b|\binfinite\b/i;
 const COUNTERPARTY_ID = /\b[a-z][a-z0-9]*_[a-z0-9_]+\b/gi;
-const KNOWN_TOOLS = ["create_order", "update_refund", "create_payout"] as const;
+const KNOWN_TOOLS = ["create_order", "create_payment_link", "create_payout"] as const;
 
 function asRecord(value: unknown): Record<string, unknown> {
   if (value && typeof value === "object" && !Array.isArray(value)) {
@@ -69,7 +69,7 @@ function extractNamedCounterparties(intent: string): string[] {
 function extractTools(intent: string): string[] {
   const lower = intent.toLowerCase();
   const found = KNOWN_TOOLS.filter((tool) => lower.includes(tool));
-  return found.length > 0 ? found : ["create_order", "update_refund"];
+  return found.length > 0 ? found : ["create_order", "create_payment_link"];
 }
 
 function extractExplicitCaps(intent: string): { per?: number; total?: number } {
@@ -137,7 +137,7 @@ export function normalizeMandateDraft(
       new Date(now.getTime() + 7 * 24 * 3600_000).toISOString(),
     ),
     allowed_counterparties: counterparties,
-    allowed_tools: stringList(rec.allowed_tools, ["create_order", "update_refund"]),
+    allowed_tools: stringList(rec.allowed_tools, ["create_order", "create_payment_link"]),
     purpose: stringField(rec.purpose, truncated.trim() || "unspecified"),
     step_up_above_paise: step,
   });

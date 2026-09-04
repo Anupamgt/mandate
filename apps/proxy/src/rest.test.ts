@@ -14,7 +14,7 @@ const body = {
   valid_from: "2026-09-01T00:00:00.000Z",
   valid_until: "2026-09-10T00:00:00.000Z",
   allowed_counterparties: ["prov_compute_a"],
-  allowed_tools: ["create_order", "update_refund"],
+  allowed_tools: ["create_order"],
   purpose: "compute",
   step_up_above_paise: 8_000,
 };

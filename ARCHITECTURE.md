@@ -182,7 +182,7 @@ Evidence (`apps/proxy/config/day0-probe.json`):
 | `GET /v1/fund_accounts` | 200 | listing works; payouts do not |
 | `POST https://mcp.razorpay.com/mcp` initialize + `tools/list` | 200 | **42 tools**, no `create_payout` |
 
-MCP money-out surface is only `update_refund`. There is no payout-create tool, which matches the REST 400. Unclassified names still fail closed (`TOOL_UNCLASSIFIED`). Full dump + class: `apps/proxy/config/upstream-tools.json`.
+The 42-tool dump exposes no money-out tool, so `MONEY_OUT` is empty and enforced as such (`create_payout` → `TOOL_UNCLASSIFIED`). Unclassified names still fail closed. Full dump + class: `apps/proxy/config/upstream-tools.json`.
 
 Copy `.env.example` → `.env` and `packages/db/.env.example` → `packages/db/.env`. Default `MANDATE_RAIL=mock` (no Razorpay keys). Windows PowerShell does not support `&&`. After `pnpm dev`:
 

@@ -2,10 +2,10 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { isToolClass } from "@mandate/shared";
+import { isToolClass, TOOL_CLASSES } from "@mandate/shared";
 
 type Dump = {
-  tools: { name: string; class: string }[];
+  tools: { name: string; class: string; comment?: string }[];
 };
 
 describe("FR-21 upstream tool classification", () => {
@@ -21,5 +21,13 @@ describe("FR-21 upstream tool classification", () => {
       names.add(tool.name);
       expect(isToolClass(tool.class), tool.name).toBe(true);
     }
+  });
+
+  it("keeps MONEY_OUT present and empty (no money-out tool in the dump)", () => {
+    expect(TOOL_CLASSES).toContain("MONEY_OUT");
+    expect(dump.tools.filter((t) => t.class === "MONEY_OUT")).toHaveLength(0);
+    const revoke = dump.tools.find((t) => t.name === "revoke_token");
+    expect(revoke?.class).toBe("READ");
+    expect(revoke?.comment).toMatch(/non-money write/i);
   });
 });

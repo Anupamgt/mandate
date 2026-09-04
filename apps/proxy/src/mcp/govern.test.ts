@@ -18,7 +18,7 @@ async function mandate(): Promise<MandateView> {
     valid_from: "2026-09-01T00:00:00.000Z",
     valid_until: "2026-09-10T00:00:00.000Z",
     allowed_counterparties: ["prov_compute_a", "razorpay"],
-    allowed_tools: ["create_order", "update_refund"],
+    allowed_tools: ["create_order"],
     purpose: "demo",
     step_up_above_paise: 4000,
   });
@@ -41,7 +41,7 @@ describe("FR-20/21/22/23 MCP governance", () => {
   it("re-exposes every dumped Razorpay tool plus mandate.status", () => {
     expect(tools).toHaveLength(42);
     expect(tools.some((t) => t.name === "create_order")).toBe(true);
-    expect(tools.some((t) => t.name === "update_refund")).toBe(true);
+    expect(tools.some((t) => t.name === "create_payment_link")).toBe(true);
     expect(classifyTool("mandate.status", tools)).toBe("READ");
   });
 

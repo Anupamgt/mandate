@@ -185,7 +185,8 @@
     {
       "name": "revoke_token",
       "description": "Revoke a saved payment method (token) for a customer. This tool revokes the specified token associated with the given customer ID. Once revoked, the token canno",
-      "class": "READ"
+      "class": "READ",
+      "comment": "non-money write; does not move funds"
     },
     {
       "name": "submit_otp",
@@ -210,9 +211,9 @@
     {
       "name": "update_refund",
       "description": "Use this tool to update the notes for a specific refund. Only the notes field can be modified.",
-      "class": "MONEY_OUT"
+      "class": "READ"
     }
   ],
   "railDecision": "s2s_order",
-  "note": "GET /v1/payouts returned 400; no create_payout MCP tool. pay() = create_order + test payment; reverse() = refund."
+  "note": "GET /v1/payouts returned 400; no create_payout MCP tool. MONEY_OUT is empty. pay() = create_order + test payment; reverse() = refund."
 }

@@ -90,7 +90,7 @@ MCP denial: [docs/demo/mcp-denial-transcript.md](./docs/demo/mcp-denial-transcri
 
 **Concurrent proposals beat the cumulative cap.** Parallel `POST /spend/propose` calls could all pass `evaluate()` before any settlement landed, so the live total exceeded `max_total_paise`. The fix is reserve-then-settle in one SQLite transaction (`apps/proxy/src/spend.ts`): the cumulative check and `Reservation` insert share `prisma.$transaction`. RT-03 fires 10 parallel ₹100 proposals at a ₹500 cap (`max_total_paise = 50000`) and ≤ 5 settle.
 
-**The test account cannot create payouts** (`GET /v1/payouts` → 400). Day-0 fell back to `s2s_order` (order + test payment; reverse = refund). `create_payout` is not in the 42-tool dump, so it is unclassified and denied (`TOOL_UNCLASSIFIED`); the MCP `MONEY_OUT` demo therefore gates `update_refund`.
+**The test account cannot create payouts** (`GET /v1/payouts` → 400). Day-0 fell back to `s2s_order`. The tool dump exposes no money-out tool, so `MONEY_OUT` is empty and enforced as such (`create_payout` → `TOOL_UNCLASSIFIED`); the gate is demonstrated on amount-bearing `MONEY_IN` tools.
 
 **The MCP denial scene was nearly cut for demo reliability.** A live MCP client in a timed walkthrough is brittle. It was kept by committing `docs/demo/mcp-denial-transcript.md` and adding `pnpm mcp:smoke` to CI (`.github/workflows/check.yml`) so the denial is reproducible without a live client.
 
@@ -99,7 +99,7 @@ MCP denial: [docs/demo/mcp-denial-transcript.md](./docs/demo/mcp-denial-transcri
 Read this before the metrics. Everything below is a deliberate scope cut, and each one is a real gap.
 
 - **Test mode only.** Every rupee here is a Razorpay test-mode rupee. Keys must be `rzp_test_`; `rzp_live_` is out of scope and untested. Nothing in the policy or audit path knows which mode it is in, but we have not proven that with live money.
-- **Payouts are not demonstrated.** This test account cannot create payouts (`GET /v1/payouts` returns 400), so the Day-0 rail is `s2s_order` and the reverse path is a refund. `create_payout` is unclassified and therefore denied. The `MONEY_OUT` tool gated in the MCP transcript is `update_refund`. The gate is the same; the tool is not the one we'd choose to show.
+- **Payouts are not demonstrated.** The test account cannot create payouts (`GET /v1/payouts` → 400). Day-0 fell back to `s2s_order`. The tool dump exposes no money-out tool, so `MONEY_OUT` is empty and enforced as such (`create_payout` → `TOOL_UNCLASSIFIED`); the gate is demonstrated on amount-bearing `MONEY_IN` tools.
 - **Mandates are signed JSON, not verifiable credentials.** Ed25519 over canonical JSON, field names aligned with AP2's Intent Mandate. That is not W3C VC compliance, and none of the protocol names in ARCHITECTURE.md §7 are compliance claims — they are a mapping of our components onto theirs.
 - **One operator key.** A single principal signs every mandate and every step-up approval. There are no delegation chains, no multi-party approval, and no key rotation. Compromise that key and the gate is still deterministic, but it is enforcing an attacker's mandate.
 - **The audit log is tamper-evident, not tamper-proof.** `pnpm audit:verify` walks a local SHA-256 hash chain and finds the first edited row. The chain head is not anchored anywhere external, so an attacker with write access to the database and the code can rewrite history consistently. It is evidence, not proof.

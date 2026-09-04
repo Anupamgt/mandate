@@ -17,7 +17,15 @@ export const SMOKE_CAPS = {
 } as const;
 
 export const SMOKE_AGENT = "agent_demo";
-export const SMOKE_TOOL = "update_refund";
+export const SMOKE_TOOL_PREFERRED = "create_payment_link";
+export const SMOKE_TOOL_FALLBACK = "capture_payment";
+export const SMOKE_UNCLASSIFIED_TOOL = "create_payout";
+
+export function pickSmokeTool(toolNames: readonly string[]): string {
+  if (toolNames.includes(SMOKE_TOOL_PREFERRED)) return SMOKE_TOOL_PREFERRED;
+  if (toolNames.includes(SMOKE_TOOL_FALLBACK)) return SMOKE_TOOL_FALLBACK;
+  throw new Error(`tools/list missing ${SMOKE_TOOL_PREFERRED} and ${SMOKE_TOOL_FALLBACK}`);
+}
 
 export type StructuredDenial = {
   decision: string;
@@ -63,7 +71,7 @@ export async function seedSmokeMandate(): Promise<{
     valid_from: "2020-01-01T00:00:00.000Z",
     valid_until: "2099-01-01T00:00:00.000Z",
     allowed_counterparties: ["prov_compute_a", "razorpay"],
-    allowed_tools: ["create_order", "update_refund"],
+    allowed_tools: ["create_order", "create_payment_link", "capture_payment"],
     purpose: "mcp-smoke",
     step_up_above_paise: 8_000,
   });
